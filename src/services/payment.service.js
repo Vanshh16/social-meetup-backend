@@ -3,9 +3,11 @@ import prisma from "../config/db.js";
 import crypto from 'crypto';
 
 // Initialize Cashfree
-Cashfree.XClientId = process.env.CASHFREE_APP_ID;
-Cashfree.XClientSecret = process.env.CASHFREE_SECRET_KEY;
-Cashfree.XEnvironment = Cashfree.Environment.SANDBOX; // Use .PRODUCTION in production
+// Cashfree.XClientId = process.env.CASHFREE_APP_ID;
+// Cashfree.XClientSecret = process.env.CASHFREE_SECRET_KEY;
+// Cashfree.XEnvironment = Cashfree.Environment.SANDBOX; // Use .PRODUCTION in production
+
+var cashfree = new Cashfree(Cashfree.SANDBOX, process.env.CASHFREE_APP_ID, process.env.CASHFREE_SECRET_KEY)
 
 /**
  * Creates a Cashfree payment order.
