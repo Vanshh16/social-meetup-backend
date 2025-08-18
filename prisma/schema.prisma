@@ -1,0 +1,259 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/config/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+  MODERATOR
+}
+
+model User {
+  id           String  @id @default(uuid())
+  name         String // Display Name (required)
+  mobileNumber String  @unique
+  email        String @unique
+  password   String // Hashed password
+  isVerified Boolean @default(false) // Verification status
+
+  profilePhoto   String? // URL or base64 image path
+  gender         Gender? // Enum
+  dateOfBirth    DateTime? // Used to calculate age group
+  whatsappNumber String?  @unique // Optional
+  aadhaarNumber  String? // Masked before display (store full securely)
+  religion       Religion? // Enum
+  city           String? // From GPS or manual entry
+  referralCode     String?   @unique
+  referredById     String?
+
+  // Optional fields
+  relationshipStatus RelationshipStatus?
+  bio                String?             @db.VarChar(200)
+  hobbies            String[] // Array of tags/hobbies
+
+  // Role
+  role        Role    @default(USER)
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  Meetup Meetup[]
+
+  JoinRequest JoinRequest[]
+
+  Chat Chat[] @relation("ChatUsers")
+
+  Message Message[]
+
+  reportsMade     UserReport[] @relation("ReportedBy")
+  reportsAgainst  UserReport[] @relation("ReportsAgainst")
+
+  blocked         UserBlock[]  @relation("BlockedBy")
+  blockedBy       UserBlock[]  @relation("BlockedUsers")
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum Religion {
+  HINDU
+  MUSLIM
+  SIKH
+  CHRISTIAN
+  JAIN
+  BUDDHIST
+  PARSI
+  OTHER
+}
+
+enum RelationshipStatus {
+  SINGLE
+  IN_RELATIONSHIP
+  MARRIED
+  COMPLICATED
+}
+
+model Meetup {
+  id               String   @id @default(uuid())
+  category         String
+  subcategory      String?
+  location         String
+  type             String   // "instant" | "planned"
+  date             DateTime?
+  time             String?  // store as string like "18:30" if planned
+  preferredAgeMin  Int?
+  preferredAgeMax  Int?
+  preferredGender  String?  // "male" | "female" | "any"
+  preferredReligion String?
+  groupSize        Int      // 1 for single, >1 for group
+  distanceRangeKm  Int?
+
+  createdBy        String
+  user             User     @relation(fields: [createdBy], references: [id])
+  createdAt        DateTime @default(now())
+
+  JoinRequest JoinRequest[]
+
+  Chat Chat[]
+}
+
+model JoinRequest {
+  id         String   @id @default(uuid())
+  meetupId   String
+  meetup     Meetup   @relation(fields: [meetupId], references: [id])
+
+  senderId   String
+  sender     User     @relation(fields: [senderId], references: [id])
+
+  status     RequestStatus @default(PENDING)
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  Payment    Payment?
+}
+
+enum RequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+model Payment {
+  id            String   @id @default(uuid())
+  
+  joinRequestId String?  @unique // Now optional 
+  joinRequest   JoinRequest? @relation(fields: [joinRequestId], references: [id])
+  
+  meetupId      String?  // Add optional relation to Meetup
+  
+  purpose       String   // e.g., "MEETUP_CREATION" or "JOIN_REQUEST"
+  amount        Int
+  status        PaymentStatus @default(PENDING)
+
+  cashfreeOrderId String?  @unique
+  paymentSessionId String?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+model Chat {
+  id        String   @id @default(uuid())
+  meetupId  String
+  meetup    Meetup   @relation(fields: [meetupId], references: [id])
+  users     User[]   @relation("ChatUsers")
+  messages  Message[]
+  createdAt DateTime @default(now())
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  chatId    String
+  chat      Chat     @relation(fields: [chatId], references: [id])
+  senderId  String
+  sender    User     @relation(fields: [senderId], references: [id])
+  content   String
+  createdAt DateTime @default(now())
+}
+
+// Add these new models to your schema.prisma file
+
+model Category {
+  id          String       @id @default(uuid())
+  name        String       @unique
+  subcategories SubCategory[]
+}
+
+model SubCategory {
+  id         String   @id @default(uuid())
+  name       String
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+}
+
+model UserWallet {
+  id            String    @id @default(uuid())
+  userId        String    @unique
+  balance       Float     @default(0.0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  transactions  WalletTransaction[]
+}
+
+model WalletTransaction {
+  id          String   @id @default(uuid())
+  walletId    String
+  wallet      UserWallet @relation(fields: [walletId], references: [id])
+  amount      Float
+  type        String   // "CREDIT" or "DEBIT"
+  description String
+  createdAt   DateTime @default(now())
+}
+
+model AppSettings {
+  id    String @id @default(uuid())
+  key   String @unique // e.g., "REFERRAL_REWARD_AMOUNT"
+  value String
+}
+
+enum ReportReason {
+  SPAM
+  INAPPROPRIATE_CONTENT
+  HARASSMENT
+  SCAM
+  OTHER
+}
+
+model UserReport {
+  id          String       @id @default(uuid())
+  reason      ReportReason
+  details     String?      @db.Text
+
+  reporterId  String
+  reporter    User         @relation("ReportedBy", fields: [reporterId], references: [id])
+
+  reportedId  String
+  reported    User         @relation("ReportsAgainst", fields: [reportedId], references: [id])
+
+  createdAt   DateTime     @default(now())
+
+  @@index([reporterId])
+  @@index([reportedId])
+}
+
+model UserBlock {
+  blockerId String
+  blocker   User   @relation("BlockedBy", fields: [blockerId], references: [id])
+
+  blockedId String
+  blocked   User   @relation("BlockedUsers", fields: [blockedId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@id([blockerId, blockedId]) // Composite key to prevent duplicate blocks
+}
+

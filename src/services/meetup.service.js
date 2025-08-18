@@ -1,0 +1,152 @@
+// import prisma from "../config/db";
+import crypto from 'crypto';
+import prisma from '../config/db.js';
+export const createMeetup = async (userId, data) => {
+  return await prisma.meetup.create({
+    data: {
+      createdBy: userId, // Correct field name
+      category: data.category,
+      subcategory: data.subcategory,
+      location: data.location, // Field name from schema
+      type: data.type,
+      date: new Date(data.date),
+      time: data.time,
+      preferredAgeMin: data.preferredAgeMin, // Field name from schema
+      preferredAgeMax: data.preferredAgeMax, // Field name from schema
+      preferredGender: data.preferredGender,
+      preferredReligion: data.religion, // Field name from schema
+      groupSize: data.groupSize,
+      distanceRangeKm: data.distanceRange, // Field name from schema
+    }
+  });
+};
+
+export const getUserMeetups = async (userId) => {
+  return await prisma.meetup.findMany({ where: { id: userId } });
+};
+
+const verifyCashfreePayment = async (orderId) => {
+    try {
+        const response = await Cashfree.PGOrderFetchPayments("2022-09-01", orderId);
+        const payment = response.data[0];
+        return payment && payment.payment_status === 'SUCCESS';
+    } catch (error) {
+        return false;
+    }
+};
+
+export const verifyPaymentAndCreateMeetup = async (userId, meetupData, paymentDetails) => {
+    const { order_id } = paymentDetails;
+
+    const isVerified = await verifyCashfreePayment(order_id);
+    if (!isVerified) {
+        throw new Error("Payment verification failed.");
+    }
+
+    return prisma.$transaction(async (tx) => {
+        const payment = await tx.payment.update({
+            where: { cashfreeOrderId: order_id },
+            data: { status: 'SUCCESS' }
+        });
+
+        const meetup = await tx.meetup.create({
+            data: {
+                createdBy: userId,
+                ...meetupData
+            }
+        });
+
+        await tx.payment.update({
+            where: { id: payment.id },
+            data: { meetupId: meetup.id }
+        });
+
+        return meetup;
+    });
+};
+
+export const fetchMeetupDetails = async (meetupId, userId) => {
+  // Logic to get full details of a single meetup
+  const meetup = await prisma.meetup.findUnique({
+    where: { id: meetupId },
+    include: {
+      user: { // The creator's public profile
+        select: { id: true, name: true, profilePhoto: true, bio: true }
+      },
+      JoinRequest: { // All accepted participants
+        where: { status: 'ACCEPTED' },
+        select: {
+          sender: {
+            select: { id: true, name: true, profilePhoto: true }
+          }
+        }
+      }
+    }
+  });
+
+  if (!meetup) {
+    throw new Error('Meetup not found.');
+  }
+
+  return meetup;
+};
+
+export const fetchMeetupHistory = async (userId) => {
+  // Fetch meetups created by the user OR meetups they have an accepted request for
+  return prisma.meetup.findMany({
+    where: {
+      OR: [
+        { createdBy: userId },
+        { JoinRequest: { some: { senderId: userId, status: 'ACCEPTED' } } }
+      ]
+    },
+    include: {
+      user: { // Creator's info
+        select: { id: true, name: true }
+      }
+    },
+    orderBy: {
+      createdAt: 'desc'
+    }
+  });
+};
+
+export const updateMeetup = async (meetupId, userId, updateData) => {
+  const meetup = await prisma.meetup.findUnique({ where: { id: meetupId } });
+
+  // Authorization check: Only the creator can edit
+  if (!meetup || meetup.createdBy !== userId) {
+    throw new Error('Meetup not found or you are not authorized to edit it.');
+  }
+
+  return prisma.meetup.update({
+    where: { id: meetupId },
+    data: updateData, // e.g., { location: 'New Place', time: '20:00' }
+  });
+};
+
+export const deleteMeetup = async (meetupId, userId) => {
+  const meetup = await prisma.meetup.findUnique({ where: { id: meetupId } });
+
+  // Authorization check: Only the creator can delete
+  if (!meetup || meetup.createdBy !== userId) {
+    throw new Error('Meetup not found or you are not authorized to delete it.');
+  }
+
+  // Use a transaction to delete the meetup and all related join requests
+  return prisma.$transaction(async (tx) => {
+    await tx.joinRequest.deleteMany({
+      where: { meetupId: meetupId },
+    });
+    // Add deletion for payments and chats if they are directly linked and need cleanup
+    await tx.payment.deleteMany({
+        where: { meetupId: meetupId },
+    });
+    await tx.chat.deleteMany({
+        where: { meetupId: meetupId },
+    });
+    await tx.meetup.delete({
+      where: { id: meetupId },
+    });
+  });
+};
