@@ -49,6 +49,8 @@ app.get('/', (req, res) => res.send('API Running'));
 const PORT = process.env.PORT || 5000;
 
 // Use httpServer to listen, not app
-httpServer.listen(PORT, () => {
-  console.log(`Server with Socket.io running on port ${PORT}`);
+app.listen(PORT, () => {
+  // console.log(`Server with Socket.io running on port ${PORT}`);
+    console.log(`Server running on port ${PORT}`);
+
 });
