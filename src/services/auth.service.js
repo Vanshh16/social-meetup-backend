@@ -2,48 +2,117 @@ import prisma from "../config/db.js";
 import { hashPassword, comparePasswords } from "../utils/password.js";
 import { fetchReferralReward } from "./admin.service.js";
 import twilio from 'twilio';
+import { OAuth2Client } from 'google-auth-library';
 
-const accountSid = process.env.TWILIO_ACCOUNT_SID;
-const authToken = process.env.TWILIO_AUTH_TOKEN;
-const client = twilio(accountSid, authToken);
+// --- Setup Clients ---
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+const twilioVerifyServiceSid = process.env.TWILIO_VERIFY_SID;
 
-export const registerUser = async (data) => {
-  const existing = await prisma.user.findFirst({
-    where: { OR: [{ mobileNumber: {equals: data.mobileNumber} }, { email: {equals:data.email} }] },
+/**
+ * Handles login or signup via Google.
+ * Verifies the Google ID token, finds an existing user or creates a new one, and returns the user.
+ * @param {string} idToken - The ID token received from the frontend Google Sign-In.
+ * @returns {Promise<object>} The user object.
+ */
+export const loginOrSignupWithGoogle = async (idToken) => {
+  // Verify the Google ID token
+  const ticket = await googleClient.verifyIdToken({
+    idToken,
+    audience: process.env.GOOGLE_CLIENT_ID,
   });
-  if (existing) throw new Error("User already exists");
+  const payload = ticket.getPayload();
 
-  const hashedPassword = await hashPassword(data.password);
+  if (!payload || !payload.email) {
+    throw new Error('Invalid Google token.');
+  }
 
-  return prisma.user.create({
-     data: {
-      name: data.name,
-      email: data.email,
-      mobileNumber: data.mobileNumber,
-      password: hashedPassword,
-      isVerified: false,
-    },
+  // Check if user already exists
+  let user = await prisma.user.findUnique({
+    where: { email: payload.email },
   });
+
+  // If user exists, log them in. If not, create a new account.
+  if (user) {
+    // If user exists but signed up with mobile, link their Google ID
+    if (!user.googleId) {
+        user = await prisma.user.update({
+            where: { id: user.id },
+            data: { googleId: payload.sub }
+        });
+    }
+  } else {
+    // Create a new user with details from Google
+    user = await prisma.user.create({
+      data: {
+        name: payload.name,
+        email: payload.email,
+        googleId: payload.sub, // The unique Google ID
+        profilePhoto: payload.picture,
+        authMethod: 'GOOGLE',
+        isVerified: true, // Google accounts are pre-verified
+        referralCode: generateReferralCode(payload.name),
+      },
+    });
+    // Create a wallet for the new user
+    await prisma.userWallet.create({ data: { userId: user.id } });
+  }
+
+  return user;
 };
 
-export const sendUserOtp = async (mobileNumber) => {
-  const user = await prisma.user.findUnique({ where: { mobileNumber } });
-  if (!user) throw new Error('User not found');
 
-const verification = await client.verify.v2.services("VA33b9fa3718abc705479e5ddcd909bdfc")
-      .verifications
-      .create({to: `${mobileNumber}`, channel: 'sms'})
-      console.log(verification.sid);
-      
-  return verification.sid;
+/**
+ * Initiates login or signup with mobile OTP.
+ * Checks if a user exists. If not, it creates one. Then sends an OTP.
+ * @param {string} mobileNumber - The user's mobile number.
+ * @returns {Promise<string>} A message indicating the OTP has been sent.
+ */
+export const sendOtpForLoginOrSignup = async (mobileNumber) => {
+  let user = await prisma.user.findUnique({ where: { mobileNumber } });
+
+  // If user doesn't exist, create a new, unverified user
+  if (!user) {
+    // A temporary email is needed as the field is mandatory.
+    // The user should be prompted to complete their profile later.
+    const tempEmail = `${mobileNumber}@temp.example.com`;
+    const tempName = `User ${mobileNumber.slice(-4)}`;
+
+    user = await prisma.user.create({
+      data: {
+        name: tempName,
+        email: tempEmail,
+        mobileNumber: mobileNumber,
+        authMethod: 'MOBILE_OTP',
+        isVerified: false,
+        referralCode: generateReferralCode(tempName),
+      },
+    });
+    // Create a wallet for the new user
+    await prisma.userWallet.create({ data: { userId: user.id } });
+  }
+
+  // Send OTP via Twilio
+  await twilioClient.verify.v2.services(twilioVerifyServiceSid)
+    .verifications
+    .create({ to: `+91${mobileNumber}`, channel: 'sms' });
+    
+  return `OTP sent to ${mobileNumber}`;
 };
 
-export const verifyUserOtp = async (mobileNumber, otp) => {
-  const verification_check = await client.verify.v2.services(process.env.TWILIO_VERIFY_SID)
+
+/**
+ * Verifies an OTP and marks the user as verified.
+ * @param {string} mobileNumber - The user's mobile number.
+ * @param {string} otp - The OTP code from the user.
+ * @returns {Promise<object>} The verified user object.
+ */
+export const verifyOtpAndLogin = async (mobileNumber, otp) => {
+  const verificationCheck = await twilioClient.verify.v2.services(twilioVerifyServiceSid)
     .verificationChecks
     .create({ to: `+91${mobileNumber}`, code: otp });
 
-  if (verification_check.status === 'approved') {
+  if (verificationCheck.status === 'approved') {
     const user = await prisma.user.update({
       where: { mobileNumber },
       data: { isVerified: true },
@@ -54,22 +123,16 @@ export const verifyUserOtp = async (mobileNumber, otp) => {
   }
 };
 
-export const loginUser = async (mobileNumber, password) => {
-  const user = await prisma.user.findUnique({ where: { mobileNumber } });
-  if (!user) throw new Error("User not found");
 
-  const valid = await comparePasswords(password, user.password);
-  if (!valid) throw new Error("Invalid credentials");
-
-  return user;
-};
-
+/**
+ * Allows a user to complete their profile after signing up.
+ * @param {string} userId - The ID of the logged-in user.
+ * @param {object} profileData - The data to update.
+ */
 export const completeUserProfile = async (userId, profileData) => {
   return prisma.user.update({
     where: { id: userId },
-    data: {
-      ...profileData,
-    },
+    data: profileData,
   });
 };
 

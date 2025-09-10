@@ -1,54 +1,60 @@
-import { registerUser, loginUser, completeUserProfile, verifyUserOtp, sendUserOtp } from '../services/auth.service.js';
+import {
+  loginOrSignupWithGoogle,
+  sendOtpForLoginOrSignup,
+  verifyOtpAndLogin,
+  completeUserProfile
+} from '../services/auth.service.js';
 import { generateToken } from '../utils/jwt.js';
 
-export const register = async (req, res, next) => {
+/**
+ * Handles Google Sign-In.
+ */
+export const authWithGoogle = async (req, res, next) => {
   try {
-    const user = await registerUser(req.body);
-    const token = generateToken({ id: user.id, role: user.role });
-    res.status(201).json({ user, token });
+    const { idToken } = req.body;
+    const user = await loginOrSignupWithGoogle(idToken);
+    const token = generateToken({ id: user.id, role: user.role, email: user.email, mobileNumber: user.mobileNumber });
+    res.status(200).json({ user, token });
   } catch (err) {
     next(err);
   }
 };
 
-export const sendOtp = async (req, res, next) => {
+/**
+ * Handles the first step of OTP-based auth: sending the code.
+ */
+export const authWithOtp = async (req, res, next) => {
   try {
     const { mobileNumber } = req.body;
-    const status = await sendUserOtp(mobileNumber);
-    res.status(200).json({ status });
+    const message = await sendOtpForLoginOrSignup(mobileNumber);
+    res.status(200).json({ success: true, message });
   } catch (err) {
     next(err);
   }
 };
 
-export const verifyOtp = async (req, res, next) => {
+/**
+ * Handles the second step of OTP-based auth: verifying the code and logging in.
+ */
+export const verifyOtpController = async (req, res, next) => {
   try {
     const { mobileNumber, otp } = req.body;
-    const user = await verifyUserOtp(mobileNumber, otp);
-    const token = generateToken({ id: user.id });
+    const user = await verifyOtpAndLogin(mobileNumber, otp);
+    const token = generateToken({ id: user.id, role: user.role, email: user.email, mobileNumber: user.mobileNumber });
     res.status(200).json({ user, token });
   } catch (err) {
     next(err);
   }
 };
 
+/**
+ * Handles profile completion.
+ */
 export const completeProfile = async (req, res, next) => {
   try {
-    const profileData = req.body;
     const userId = req.user.id;
-    const updatedUser = await completeUserProfile(userId, profileData);
+    const updatedUser = await completeUserProfile(userId, req.body);
     res.status(200).json({ user: updatedUser });
-  } catch (err) {
-    next(err);
-  }
-};
-
-export const login = async (req, res, next) => {
-  try {
-    const { mobileNumber, password } = req.body;
-    const user = await loginUser(mobileNumber, password);
-    const token = generateToken({ id: user.id, role: user.role });
-    res.status(200).json({ user, token });
   } catch (err) {
     next(err);
   }

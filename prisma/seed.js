@@ -1,6 +1,4 @@
-// import { PrismaClient } from '@prisma/client';
-import { faker } from "@faker-js/faker";
-import bcrypt from "bcryptjs";
+import { faker } from '@faker-js/faker';
 import prisma from "../src/config/db.js";
 
 // Helper function to generate a referral code
@@ -13,7 +11,7 @@ const generateReferralCode = (name) => {
 async function main() {
   console.log('🌱 Starting to seed the database...');
 
-  // 1. Clean up existing data in the correct order to avoid constraint violations
+  // 1. Clean up existing data
   console.log('🗑️  Cleaning up the database...');
   await prisma.message.deleteMany();
   await prisma.chat.deleteMany();
@@ -32,25 +30,15 @@ async function main() {
   // 2. Seed App Settings
   console.log('⚙️  Seeding app settings...');
   await prisma.appSettings.create({
-    data: {
-      key: 'REFERRAL_REWARD_AMOUNT',
-      value: '10', // Stored as a string
-    },
-  });
-  await prisma.appSettings.create({
-    data: {
-      key: 'MEETUP_SEARCH_RADIUS_KM',
-      value: '25',
-    },
+    data: { key: 'REFERRAL_REWARD_AMOUNT', value: '10' },
   });
 
-  // 3. Seed Categories and Subcategories
-  console.log('📚 Seeding categories and subcategories...');
+  // 3. Seed Categories
+  console.log('📚 Seeding categories...');
   const categoriesData = [
-    { name: 'Food & Drink', subcategories: ['Coffee', 'Dinner', 'Brunch', 'Bar Hopping'] },
-    { name: 'Sports & Fitness', subcategories: ['Running', 'Yoga', 'Gym', 'Tennis'] },
-    { name: 'Arts & Culture', subcategories: ['Museum', 'Concert', 'Theater', 'Art Gallery'] },
-    { name: 'Outdoors & Adventure', subcategories: ['Hiking', 'Camping', 'Beach Day', 'Cycling'] },
+    { name: 'Food & Drink', subcategories: ['Coffee', 'Dinner', 'Brunch'] },
+    { name: 'Sports & Fitness', subcategories: ['Running', 'Gym', 'Tennis'] },
+    { name: 'Outdoors & Adventure', subcategories: ['Hiking', 'Beach Day'] },
   ];
 
   for (const cat of categoriesData) {
@@ -67,46 +55,6 @@ async function main() {
   // 4. Seed Users
   console.log('👤 Seeding users...');
   const users = [];
-  const hashedPassword = await bcrypt.hash('password123', 10);
-
-  // Create a main user to be the first referrer
-  const mainUser = await prisma.user.create({
-    data: {
-      name: 'Alice Smith',
-      email: 'alice@example.com',
-      mobileNumber: '9999999999',
-      password: hashedPassword,
-      isVerified: true,
-      gender: 'FEMALE',
-      dateOfBirth: faker.date.birthdate({ min: 25, max: 35, mode: 'age' }),
-      city: 'Lucknow',
-      referralCode: generateReferralCode('Alice'),
-    },
-  });
-  users.push(mainUser);
-
-  // Create 10 other users, some referred by Alice
-  for (let i = 0; i < 10; i++) {
-    const name = faker.person.fullName();
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email: faker.internet.email().toLowerCase(),
-        mobileNumber: faker.phone.number('9#########'),
-        password: hashedPassword,
-        isVerified: true,
-        gender: faker.helpers.arrayElement(['MALE', 'FEMALE']),
-        dateOfBirth: faker.date.birthdate({ min: 18, max: 40, mode: 'age' }),
-        city: faker.location.city(),
-        bio: faker.lorem.sentence(),
-        hobbies: faker.helpers.arrayElements(['Reading', 'Traveling', 'Cooking', 'Gaming', 'Music'], 3),
-        referralCode: generateReferralCode(name),
-        // First 3 users are referred by Alice
-        referredById: i < 3 ? mainUser.id : null,
-      },
-    });
-    users.push(user);
-  }
 
   // Create an Admin User
   const adminUser = await prisma.user.create({
@@ -114,13 +62,51 @@ async function main() {
       name: 'Admin User',
       email: 'admin@example.com',
       mobileNumber: '9876543210',
-      password: hashedPassword,
       isVerified: true,
       role: 'ADMIN',
+      authMethod: 'GOOGLE',
+      googleId: 'admin_google_id_123',
       referralCode: generateReferralCode('Admin'),
     },
   });
   users.push(adminUser);
+
+  // Create 5 Google-authenticated users
+  for (let i = 0; i < 5; i++) {
+    const name = faker.person.fullName();
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email: faker.internet.email().toLowerCase(),
+        mobileNumber: faker.phone.number('9#########'),
+        isVerified: true,
+        authMethod: 'GOOGLE',
+        googleId: `google_id_${faker.string.uuid()}`,
+        profilePhoto: faker.image.avatar(),
+        city: faker.location.city(),
+        referralCode: generateReferralCode(name),
+      },
+    });
+    users.push(user);
+  }
+
+  // Create 5 OTP-authenticated users
+  for (let i = 0; i < 5; i++) {
+    const mobileNumber = faker.phone.number('9#########');
+    const name = faker.person.fullName();
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email: `${mobileNumber}@temp-email.com`,
+        mobileNumber: mobileNumber,
+        isVerified: true,
+        authMethod: 'MOBILE_OTP',
+        city: faker.location.city(),
+        referralCode: generateReferralCode(name),
+      },
+    });
+    users.push(user);
+  }
   console.log(`Created ${users.length} users in total.`);
 
   // 5. Seed Wallets for each user
@@ -133,13 +119,11 @@ async function main() {
       },
     });
   }
-  console.log('Created wallets for all users.');
 
   // 6. Seed a full interaction scenario
   console.log('💬 Seeding a full user interaction scenario...');
-  const meetupCreator = users[0]; // Alice
-  const joiner = users[1];
-  const anotherUser = users[2];
+  const meetupCreator = users[1]; // A Google user
+  const joiner = users[6];       // An OTP user
 
   // a. Create a Meetup
   const meetup = await prisma.meetup.create({
@@ -147,14 +131,11 @@ async function main() {
       createdBy: meetupCreator.id,
       category: 'Food & Drink',
       subcategory: 'Coffee',
-      location: 'Hazratganj, Lucknow',
+      location: 'Ranpur, Rajasthan',
       type: 'planned',
       date: faker.date.future(),
       time: '18:00',
-      preferredAgeMin: 20,
-      preferredAgeMax: 35,
-      preferredGender: 'any',
-      groupSize: 2,
+      groupSize: 2
     },
   });
 
@@ -167,16 +148,15 @@ async function main() {
     },
   });
 
-  // c. Create a successful Payment using Cashfree fields
+  // c. Create a successful Payment
   await prisma.payment.create({
     data: {
       joinRequestId: joinRequest.id,
       meetupId: meetup.id,
       purpose: 'JOIN_REQUEST',
-      amount: 10000, // in paise
+      amount: 10000,
       status: 'SUCCESS',
       cashfreeOrderId: `order_${faker.string.alphanumeric(14)}`,
-      paymentSessionId: `session_${faker.string.alphanumeric(20)}`,
     },
   });
 
@@ -184,9 +164,7 @@ async function main() {
   const chat = await prisma.chat.create({
     data: {
       meetupId: meetup.id,
-      users: {
-        connect: [{ id: meetupCreator.id }, { id: joiner.id }],
-      },
+      users: { connect: [{ id: meetupCreator.id }, { id: joiner.id }] },
     },
   });
 
@@ -195,7 +173,7 @@ async function main() {
     data: {
       chatId: chat.id,
       senderId: joiner.id,
-      content: 'Hey! Looking forward to the meetup.',
+      content: 'Hey! Looking forward to meeting up.',
     },
   });
 
@@ -203,17 +181,16 @@ async function main() {
   console.log('🛡️  Seeding a report and a block...');
   await prisma.userReport.create({
     data: {
-      reporterId: anotherUser.id,
-      reportedId: users[4].id,
+      reporterId: users[2].id,
+      reportedId: users[7].id,
       reason: 'SPAM',
-      details: 'This user sent unsolicited messages.',
     },
   });
 
   await prisma.userBlock.create({
     data: {
       blockerId: meetupCreator.id,
-      blockedId: users[5].id,
+      blockedId: users[8].id,
     },
   });
 
