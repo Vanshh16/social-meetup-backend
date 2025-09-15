@@ -7,6 +7,6 @@ const router = express.Router();
 router.post('/google', authWithGoogle);
 router.post('/otp', authWithOtp);
 router.post('/otp/verify', verifyOtpController);
-router.put('/profile', requireAuth, completeProfile);
+router.put('/complete-profile', requireAuth, completeProfile);
 
 export default router;
