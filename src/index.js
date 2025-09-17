@@ -15,6 +15,7 @@ import adminRoutes from './routes/admin.routes.js';
 import walletRoutes from './routes/wallet.routes.js';
 import reportRoutes from './routes/report.routes.js';
 import userRoutes from './routes/user.routes.js';
+import uploadRoutes from './routes/upload.routes.js';
 
 dotenv.config();
 
@@ -43,6 +44,7 @@ app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/wallet', walletRoutes);
 app.use('/api/v1/reports', reportRoutes);
 app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/uploads', uploadRoutes);
 
 app.get('/', (req, res) => res.send('API Running'));
 

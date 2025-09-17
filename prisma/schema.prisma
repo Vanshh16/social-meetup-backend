@@ -38,6 +38,7 @@ model User {
   city           String? // From GPS or manual entry
   referralCode     String?   @unique
   referredById     String?
+  pictures       String[]
 
   // Optional fields
   relationshipStatus RelationshipStatus?
