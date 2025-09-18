@@ -1,6 +1,5 @@
 import prisma from "../config/db.js";
 import { calculateAge } from "../utils/helper.js";
-// import { calculateAge } from "../utils/helpers.js";
 
 export const createJoinRequest = async (meetupId, senderId) => {
   const meetup = await prisma.meetup.findUnique({ where: { id: meetupId } });

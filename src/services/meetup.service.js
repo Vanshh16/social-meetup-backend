@@ -38,16 +38,16 @@ const verifyCashfreePayment = async (orderId) => {
 export const verifyPaymentAndCreateMeetup = async (userId, meetupData, paymentDetails) => {
     const { order_id } = paymentDetails;
 
-    const isVerified = await verifyCashfreePayment(order_id);
-    if (!isVerified) {
-        throw new Error("Payment verification failed.");
-    }
+    // const isVerified = await verifyCashfreePayment(order_id);
+    // if (!isVerified) {
+    //     throw new Error("Payment verification failed.");
+    // }
 
     return prisma.$transaction(async (tx) => {
-        const payment = await tx.payment.update({
-            where: { cashfreeOrderId: order_id },
-            data: { status: 'SUCCESS' }
-        });
+        // const payment = await tx.payment.update({
+        //     where: { cashfreeOrderId: order_id },
+        //     data: { status: 'SUCCESS' }
+        // });
 
         const meetup = await tx.meetup.create({
             data: {
@@ -56,10 +56,10 @@ export const verifyPaymentAndCreateMeetup = async (userId, meetupData, paymentDe
             }
         });
 
-        await tx.payment.update({
-            where: { id: payment.id },
-            data: { meetupId: meetup.id }
-        });
+        // await tx.payment.update({
+        //     where: { id: payment.id },
+        //     data: { meetupId: meetup.id }
+        // });
 
         return meetup;
     });
