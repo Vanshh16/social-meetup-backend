@@ -1,4 +1,4 @@
-import { findMatchesForUser, searchMeetups } from '../services/match.service.js';
+import { findMatchesForUser, searchMeetups, searchMeetupsByDistance } from '../services/match.service.js';
 
 // --- Existing controller function ---
 export const findMatches = async (req, res, next) => {
@@ -17,7 +17,7 @@ export const searchMeetupsController = async (req, res, next) => {
     try {
         const userId = req.user.id;
         const searchCriteria = req.body; // The search filters from the frontend
-        const meetups = await searchMeetups(userId, searchCriteria);
+        const meetups = await searchMeetupsByDistance(userId, searchCriteria);
 
         if (meetups.length === 0) {
             return res.status(200).json({ success: true, message: "No meetups found matching your criteria.", data: [] });

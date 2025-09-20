@@ -99,7 +99,9 @@ model Meetup {
   id               String   @id @default(uuid())
   category         String
   subcategory      String?
-  location         String
+  locationName     String?   // A descriptive name for the location (e.g., "Cafe Coffee Day")
+  latitude         Float     // The latitude coordinate
+  longitude        Float
   type             String   // "instant" | "planned"
   date             DateTime?
   time             String?  // store as string like "18:30" if planned

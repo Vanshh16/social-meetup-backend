@@ -1,6 +1,7 @@
 import { faker } from '@faker-js/faker';
 import prisma from "../src/config/db.js";
 
+// Helper function to generate a referral code
 const generateReferralCode = (name) => {
     const namePart = name.split(' ')[0].toUpperCase().substring(0, 5);
     const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -99,16 +100,16 @@ async function main() {
     console.log('💰 Seeding user wallets...');
     for (const user of users) {
         await prisma.userWallet.create({
-            data: {
-                userId: user.id,
-                balance: parseFloat(faker.finance.amount({ min: 0, max: 100, dec: 2 })),
-            },
+            data: { userId: user.id, balance: parseFloat(faker.finance.amount({ min: 0, max: 100, dec: 2 })) },
         });
     }
 
-    // 6. Seed Meetups
-    console.log('🎉 Seeding meetups...');
+    // 6. Seed Meetups with Coordinates
+    console.log('🎉 Seeding meetups with coordinates...');
     const meetups = [];
+    const baseLat = 26.8467;
+    const baseLon = 80.9462;
+
     for (let i = 0; i < 15; i++) {
         const creator = users[i + 1];
         const randomCategory = faker.helpers.arrayElement(categoriesData);
@@ -117,7 +118,9 @@ async function main() {
                 createdBy: creator.id,
                 category: randomCategory.name,
                 subcategory: faker.helpers.arrayElement(randomCategory.subcategories),
-                location: 'Lucknow, Uttar Pradesh',
+                locationName: `A spot in ${faker.location.street()}`,
+                latitude: faker.location.latitude({ min: baseLat - 0.1, max: baseLat + 0.1 }),
+                longitude: faker.location.longitude({ min: baseLon - 0.1, max: baseLon + 0.1 }),
                 type: 'planned',
                 date: faker.date.future(),
                 time: '19:00',
@@ -170,15 +173,19 @@ async function main() {
     for (let i = 0; i < 10; i++) {
         const reporter = users[i + 1];
         const reported = users[i + 11];
-        await prisma.userReport.create({
-            data: { reporterId: reporter.id, reportedId: reported.id, reason: 'SPAM' },
-        });
+        if (reporter && reported && reporter.id !== reported.id) {
+            await prisma.userReport.create({
+                data: { reporterId: reporter.id, reportedId: reported.id, reason: 'SPAM' },
+            });
+        }
 
         const blocker = users[i + 11];
         const blocked = users[i + 1];
-        await prisma.userBlock.create({
-            data: { blockerId: blocker.id, blockedId: blocked.id },
-        });
+        if (blocker && blocked && blocker.id !== blocked.id) {
+            await prisma.userBlock.create({
+                data: { blockerId: blocker.id, blockedId: blocked.id },
+            });
+        }
     }
     console.log('Created 10 reports and 10 blocks.');
 
@@ -193,3 +200,4 @@ main()
     .finally(async () => {
         await prisma.$disconnect();
     });
+

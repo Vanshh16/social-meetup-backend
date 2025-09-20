@@ -43,6 +43,10 @@ export const verifyPaymentAndCreateMeetup = async (userId, meetupData, paymentDe
     //     throw new Error("Payment verification failed.");
     // }
 
+    if (!meetupData.latitude || !meetupData.longitude) {
+        throw new Error("Latitude and longitude are required to create a meetup.");
+    }
+    
     return prisma.$transaction(async (tx) => {
         // const payment = await tx.payment.update({
         //     where: { cashfreeOrderId: order_id },

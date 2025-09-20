@@ -1,5 +1,6 @@
 import prisma from "../config/db.js";
 import { calculateAge } from "../utils/helper.js";
+import haversine from 'haversine-distance';
 
 export const findMatchesForUser = async (userId) => {
   const userMeetup = await prisma.meetup.findFirst({
@@ -154,6 +155,95 @@ export const searchMeetups = async (userId, criteria) => {
 
     // 4. Process and return the results
     return matches.map((match) => ({
+        ...match,
+        user: {
+            ...match.user,
+            age: calculateAge(match.user.dateOfBirth),
+            dateOfBirth: undefined,
+        },
+    }));
+};
+
+/**
+ * Searches for meetups based on user's location, chosen radius, and other criteria.
+ * @param {string} userId - The ID of the user performing the search.
+ * @param {object} criteria - Search filters including user's coords and desired radius.
+ * @returns {Promise<Array>} A list of matching meetups, sorted by distance.
+ */
+export const searchMeetupsByDistance = async (userId, criteria) => {
+    const { userLat, userLon, radiusKm, ...otherCriteria } = criteria;
+
+    if (!userLat || !userLon || !radiusKm) {
+        throw new Error("User coordinates and a search radius are required.");
+    }
+
+    // 1. Get IDs of users to exclude (blocked users)
+    const usersIHaveBlocked = await prisma.userBlock.findMany({
+        where: { blockerId: userId },
+        select: { blockedId: true },
+    });
+    const usersWhoHaveBlockedMe = await prisma.userBlock.findMany({
+        where: { blockedId: userId },
+        select: { blockerId: true },
+    });
+    const excludedIds = [
+        ...usersIHaveBlocked.map(u => u.blockedId),
+        ...usersWhoHaveBlockedMe.map(u => u.blockerId),
+    ];
+
+
+    // Build the initial query based on non-location filters
+    const whereClause = {
+        createdBy: { not: userId , notIn: excludedIds  },
+    };
+
+    if (otherCriteria.category) {
+        whereClause.category = otherCriteria.category;
+    }
+    if (otherCriteria.subcategory) {
+        whereClause.subcategory = otherCriteria.subcategory;
+    }
+    if (otherCriteria.preferredGender && otherCriteria.preferredGender !== 'any') {
+        whereClause.preferredGender = { in: [otherCriteria.preferredGender, 'any'], mode: 'insensitive' };
+    }
+    if (otherCriteria.dateStart && otherCriteria.dateEnd) {
+        whereClause.date = {
+            gte: new Date(otherCriteria.dateStart),
+            lte: new Date(otherCriteria.dateEnd),
+        };
+    }
+    if (otherCriteria.preferredAgeMin && otherCriteria.preferredAgeMax) {
+        whereClause.preferredAgeMin = { gte: otherCriteria.preferredAgeMin };
+        whereClause.preferredAgeMax = { lte: otherCriteria.preferredAgeMax };
+    }
+
+    // Fetch ALL potential meetups that match the non-location criteria
+    const potentialMeetups = await prisma.meetup.findMany({
+        where: whereClause,
+        include: { user: { select: { id: true, name: true, profilePhoto: true, dateOfBirth: true } } },
+    });
+
+    // Define the user's location for distance calculation
+    const userLocation = { latitude: userLat, longitude: userLon };
+
+    // Calculate distance for each meetup and filter by radius
+    const meetupsWithDistance = potentialMeetups.map(meetup => {
+        const meetupLocation = { latitude: meetup.latitude, longitude: meetup.longitude };
+        const distanceMeters = haversine(userLocation, meetupLocation);
+        const distanceKm = distanceMeters / 1000;
+        return { ...meetup, distanceKm };
+    }).filter(meetup => {
+        if (radiusKm === 'more_than_10') {
+            return meetup.distanceKm > 10;
+        }
+        return meetup.distanceKm <= parseInt(radiusKm);
+    });
+
+    // Sort the final list by distance (closest first)
+    meetupsWithDistance.sort((a, b) => a.distanceKm - b.distanceKm);
+    
+    // Process and return the results
+    return meetupsWithDistance.map((match) => ({
         ...match,
         user: {
             ...match.user,
