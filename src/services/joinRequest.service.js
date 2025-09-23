@@ -97,7 +97,7 @@ export const respondToRequest = async (requestId, userId, action) => {
         request: updatedRequest
     };
     // Emit to the room named after the sender's ID
-    io.to(request.sender.id).emit(eventName, payload);
+    io.to(request.senderId).emit(eventName, payload);
   }
 
   return updatedRequest;
