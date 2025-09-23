@@ -36,7 +36,7 @@ app.use('/api/v1/matches', matchRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/wallet', walletRoutes);
 app.use('/api/v1/reports', reportRoutes);
-app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/user', userRoutes);
 app.use('/api/v1/uploads', uploadRoutes);
 
 app.get('/', (req, res) => res.send('API Running'));
