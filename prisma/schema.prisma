@@ -39,6 +39,7 @@ model User {
   referralCode     String?   @unique
   referredById     String?
   pictures       String[]
+  fcmTokens      String[]
 
   // Optional fields
   relationshipStatus RelationshipStatus?

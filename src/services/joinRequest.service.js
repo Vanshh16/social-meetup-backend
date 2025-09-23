@@ -1,4 +1,5 @@
 import prisma from "../config/db.js";
+import { io } from "../socket/socketHandler.js";
 import { calculateAge } from "../utils/helper.js";
 
 export const createJoinRequest = async (meetupId, senderId) => {
@@ -12,9 +13,25 @@ export const createJoinRequest = async (meetupId, senderId) => {
   const existing = await prisma.joinRequest.findFirst({ where: { meetupId, senderId } });
   if (existing) throw new Error('Already requested to join this meetup');
 
-  return prisma.joinRequest.create({
+  const newRequest = await prisma.joinRequest.create({
     data: { meetupId, senderId },
+    include: {
+        sender: { select: { name: true, profilePhoto: true } }
+    }
   });
+
+   // --- EMIT NOTIFICATION TO MEETUP CREATOR ---
+  if (io) {
+    const eventName = 'new_join_request'; 
+    const payload = {
+        message: `${newRequest.sender.name} wants to join your meetup!`,
+        request: newRequest
+    };
+    // Emit to the room named after the meetup creator's ID
+    io.to(meetup.createdBy).emit(eventName, payload);
+  } 
+
+  return newRequest;
 };
 
 export const getMeetupRequests = async (meetupId, userId) => {
@@ -67,8 +84,21 @@ export const respondToRequest = async (requestId, userId, action) => {
   else if (action === 'reject') status = 'REJECTED';
   else throw new Error('Invalid action');
 
-  return prisma.joinRequest.update({
+  const updatedRequest = await prisma.joinRequest.update({
     where: { id: requestId },
     data: { status },
   });
+
+  // --- EMIT NOTIFICATION TO THE REQUEST SENDER ---
+  if (io) {
+    const eventName = 'join_request_update';
+    const payload = {
+        message: `Your request to join the meetup has been ${status.toLowerCase()}.`,
+        request: updatedRequest
+    };
+    // Emit to the room named after the sender's ID
+    io.to(request.sender.id).emit(eventName, payload);
+  }
+
+  return updatedRequest;
 };

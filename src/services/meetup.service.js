@@ -154,3 +154,20 @@ export const deleteMeetup = async (meetupId, userId) => {
     });
   });
 };
+
+// {
+//           "meetupData": {
+//             "category": "Food & Drink",
+//             "subcategory": "Coffee",
+//             "locationName": "Starbucks, Hazratganj",
+//             "latitude": 26.8523,
+//             "longitude": 80.9427,
+//             "type": "planned",
+//             "date": "2025-10-20T00:00:00.000Z",
+//             "time": "18:00",
+//             "groupSize": 2
+//           },
+//           "paymentDetails": {
+//             "order_id": "{{order_id}}"
+//           }
+//         }

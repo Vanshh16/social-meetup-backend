@@ -16,6 +16,7 @@ import {
   getDashboardStats,
   getAllSettings,
   updateAllSettings,
+  sendNotificationController,
 } from '../controllers/admin.controller.js';
 
 const router = Router();
@@ -49,5 +50,8 @@ router.put('/settings', updateAllSettings);
 
 // --- Analytics ---
 router.get('/stats/dashboard', getDashboardStats);
+
+// --- Notifications ---
+router.post('/users/:userId/notify', sendNotificationController);
 
 export default router;

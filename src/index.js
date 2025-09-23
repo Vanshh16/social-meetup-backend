@@ -22,14 +22,7 @@ dotenv.config();
 const app = express();
 const httpServer = http.createServer(app);
 
-const io = new Server(httpServer, {
-  cors: {
-    origin: "*", // Be more specific in production (e.g., 'http://your-frontend-url.com')
-    methods: ["GET", "POST"]
-  }
-});
-
-initializeSocket(io);
+initializeSocket(httpServer);
 
 app.use(cors());
 app.use(morgan('dev'));
@@ -51,8 +44,8 @@ app.get('/', (req, res) => res.send('API Running'));
 const PORT = process.env.PORT || 5000;
 
 // Use httpServer to listen, not app
-app.listen(PORT, () => {
-  // console.log(`Server with Socket.io running on port ${PORT}`);
-    console.log(`Server running on port ${PORT}`);
+httpServer.listen(PORT, () => {
+  console.log(`Server with Socket.io running on port ${PORT}`);
+    // console.log(`Server running on port ${PORT}`);
 
 });

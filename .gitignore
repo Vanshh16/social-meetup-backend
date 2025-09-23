@@ -6,3 +6,5 @@ dist
 /src/config/generated/prisma
 
 /migrations
+
+firebase-service-account.json

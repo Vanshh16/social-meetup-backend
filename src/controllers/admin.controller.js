@@ -14,6 +14,7 @@ import {
   fetchDashboardStats,
   fetchAllSettings,
   updateSettings,
+  sendNotificationToUser,
 } from '../services/admin.service.js';
 
 export const getAllUsers = async (req, res, next) => {
@@ -166,4 +167,15 @@ export const updateAllSettings = async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+};
+
+export const sendNotificationController = async (req, res, next) => {
+    try {
+        const { userId } = req.params;
+        const { title, body } = req.body;
+        const result = await sendNotificationToUser(userId, title, body);
+        res.status(200).json({ success: true, data: result });
+    } catch (error) {
+        next(error);
+    }
 };

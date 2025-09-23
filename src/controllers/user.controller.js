@@ -1,4 +1,4 @@
-import { blockUser, unblockUser, getBlockedUsers } from '../services/user.service.js';
+import { blockUser, unblockUser, getBlockedUsers, registerFcmToken } from '../services/user.service.js';
 
 export const blockUserController = async (req, res, next) => {
   try {
@@ -26,6 +26,17 @@ export const getBlockedUsersController = async (req, res, next) => {
   try {
     const blockedList = await getBlockedUsers(req.user.id);
     res.status(200).json({ success: true, data: blockedList });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+export const registerFcmTokenController = async (req, res, next) => {
+  try {
+    const { token } = req.body;
+    await registerFcmToken(req.user.id, token);
+    res.status(200).json({ success: true, message: 'FCM token registered successfully.' });
   } catch (error) {
     next(error);
   }

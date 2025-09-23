@@ -1,4 +1,5 @@
 import prisma from '../config/db.js';
+import admin from '../config/firebase.js';
 
 /**
  * Fetches all users from the database, excluding their passwords.
@@ -275,4 +276,38 @@ export const updateSettings = async (settings) => {
 
   // Run all updates within a single transaction
   return prisma.$transaction(updateOperations);
+};
+
+/**
+ * Sends a push notification to a specific user.
+ * @param {string} userId - The ID of the user to notify.
+ * @param {string} title - The title of the notification.
+ * @param {string} body - The message content of the notification.
+ */
+export const sendNotificationToUser = async (userId, title, body) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { fcmTokens: true },
+  });
+
+  if (!user || !user.fcmTokens || user.fcmTokens.length === 0) {
+    throw new Error('User does not have any registered devices for notifications.');
+  }
+
+  const message = {
+    notification: {
+      title,
+      body,
+    },
+    tokens: user.fcmTokens,
+  };
+
+  try {
+    const response = await admin.messaging().sendMulticast(message);
+    console.log('Successfully sent message:', response);
+    return { success: true, ...response };
+  } catch (error) {
+    console.error('Error sending message:', error);
+    throw new Error('Failed to send notification.');
+  }
 };
