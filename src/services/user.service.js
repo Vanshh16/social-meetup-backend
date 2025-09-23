@@ -1,4 +1,44 @@
 import prisma from '../config/db.js';
+import { calculateAge } from '../utils/helper.js';
+
+
+/**
+ * Fetches a public profile for a given user.
+ * @param {string} userId - The ID of the user whose profile is being requested.
+ */
+export const getUserProfile = async (userId) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      name: true,
+      profilePhoto: true,
+      gender: true,
+      city: true,
+      bio: true,
+      hobbies: true,
+      pictures: true,
+      dateOfBirth: true, 
+      Meetup: { // Include the meetups created by this user
+        orderBy: {
+          createdAt: 'desc',
+        },
+        take: 5, // Limit to the 5 most recent meetups
+      },
+    },
+  });
+
+  if (!user) {
+    throw new Error('User not found.');
+  }
+
+  // Calculate age and remove the dateOfBirth from the final object for privacy
+  const { dateOfBirth, ...userProfile } = user;
+  userProfile.age = calculateAge(dateOfBirth);
+
+  return userProfile;
+};
+
 
 /**
  * Adds an FCM token to a user's record, ensuring no duplicates.
