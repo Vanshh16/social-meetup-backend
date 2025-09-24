@@ -15,9 +15,14 @@ const initializeSocket = (httpServer) => {
   });
 
   io.use((socket, next) => {
-    const token = socket.handshake.auth.token;
-    if (!token) {
-      return next(new Error('Authentication error: Token not provided.'));
+    let token;
+
+    if (socket.handshake.auth && socket.handshake.auth.token) {
+      // Modern client (e.g., socket.io-client)
+      token = socket.handshake.auth.token;
+    } else if (socket.handshake.headers && socket.handshake.headers.authorization) {
+      // Client that uses headers (e.g., Postman)
+      token = socket.handshake.headers.authorization.split(' ')[1];
     }
     jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
       if (err) {
