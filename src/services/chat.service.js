@@ -1,6 +1,7 @@
 import prisma from "../config/db.js";
 import AppError from "../utils/appError.js";
 
+
 /**
  * Saves a new message to the database.
  * @param {string} chatId - The ID of the chat room.

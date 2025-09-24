@@ -1,4 +1,5 @@
 import prisma from '../config/db.js';
+import AppError from '../utils/appError.js';
 
 /**
  * Updates the user's profile photo URL in the database.
