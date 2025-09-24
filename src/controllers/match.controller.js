@@ -7,7 +7,7 @@ export const findMatches = async (req, res, next) => {
     const matches = await findMatchesForUser(userId);
     res.status(200).json({ success: true, data: matches });
   } catch (error) {
-    return res.status(400).json({ success: false, message: error.message, data: [] });
+    // return res.status(400).json({ success: false, message: error.message, data: [] });
     next(error);
   }
 };
@@ -26,7 +26,7 @@ export const searchMeetupsController = async (req, res, next) => {
 
         res.status(200).json({ success: true, data: meetups });
     } catch (error) {
-        return res.status(400).json({ success: false, message: error.message, data: [] });
+        // return res.status(400).json({ success: false, message: error.message, data: [] });
         next(error);
     }
 };

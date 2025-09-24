@@ -1,13 +1,14 @@
 import { Cashfree } from 'cashfree-pg';
 import prisma from "../config/db.js";
 import crypto from 'crypto';
+import AppError from '../utils/appError.js';
 
 // Initialize Cashfree
 // Cashfree.XClientId = process.env.CASHFREE_APP_ID;
 // Cashfree.XClientSecret = process.env.CASHFREE_SECRET_KEY;
 // Cashfree.XEnvironment = Cashfree.Environment.SANDBOX; // Use .PRODUCTION in production
 
-var cashfree = new Cashfree(Cashfree.SANDBOX, process.env.CASHFREE_APP_ID, process.env.CASHFREE_SECRET_KEY)
+// var cashfree = new Cashfree(Cashfree.SANDBOX, process.env.CASHFREE_APP_ID, process.env.CASHFREE_SECRET_KEY)
 
 /**
  * Creates a Cashfree payment order.
@@ -67,7 +68,7 @@ export const verifyJoinPaymentAndUnlockChat = async (paymentDetails) => {
 
     const isVerified = await verifyCashfreePayment(order_id);
     if (!isVerified) {
-        throw new Error("Payment verification failed.");
+        throw new AppError("Payment verification failed.", 400);
     }
     
     return prisma.$transaction(async (tx) => {
@@ -78,7 +79,10 @@ export const verifyJoinPaymentAndUnlockChat = async (paymentDetails) => {
         });
 
         if (!payment.joinRequest) {
-            throw new Error("Associated join request not found for this payment.");
+            throw new AppError("Associated join request not found for this payment.", 404);
+        }
+        if (!payment.joinRequest.meetup) {
+            throw new AppError("Associated meetup not found for this join request.", 404);
         }
         
         const chat = await tx.chat.create({

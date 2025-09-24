@@ -1,4 +1,5 @@
 import prisma from "../config/db.js";
+import AppError from "../utils/appError.js";
 
 /**
  * Saves a new message to the database.
@@ -8,6 +9,11 @@ import prisma from "../config/db.js";
  * @returns {Promise<object>} The newly created message object with sender details.
  */
 export const saveMessage = async (chatId, senderId, content) => {
+
+  if (!chatId || !senderId || !content) {
+    throw new AppError("chatId, senderId, and content are required.", 400);
+  }
+  
   try {
     const message = await prisma.message.create({
       data: {

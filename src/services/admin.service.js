@@ -1,5 +1,6 @@
 import prisma from '../config/db.js';
 import admin from '../config/firebase.js';
+import AppError from '../utils/appError.js';
 
 /**
  * Fetches all users from the database, excluding their passwords.
@@ -99,7 +100,7 @@ export const fetchReferralReward = async () => {
 
 export const updateReferralReward = async (amount) => {
   if (typeof amount !== 'number' || amount < 0) {
-    throw new Error('Invalid reward amount.');
+    throw new AppError('Invalid credit amount.', 400);
   }
   return prisma.appSettings.upsert({
     where: { key: REFERRAL_REWARD_KEY },
@@ -110,7 +111,7 @@ export const updateReferralReward = async (amount) => {
 
 export const manuallyCreditWallet = async ({ userId, amount, description }) => {
   if (typeof amount !== 'number' || amount <= 0) {
-    throw new Error('Invalid credit amount.');
+    throw new AppError('Invalid credit amount.', 400);
   }
 
   // Use a transaction to ensure both operations (update wallet, create transaction record) succeed or fail together.
@@ -121,7 +122,7 @@ export const manuallyCreditWallet = async ({ userId, amount, description }) => {
     });
 
     if (!wallet) {
-      throw new Error('User wallet not found.');
+      throw new AppError('User wallet not found.', 404);
     }
 
     // 2. Update the wallet balance
@@ -169,7 +170,7 @@ export const fetchReportDetails = async (reportId) => {
     },
   });
   if (!report) {
-    throw new Error('Report not found.');
+  throw new AppError('Report not found.', 404);
   }
   return report;
 };
@@ -177,7 +178,7 @@ export const fetchReportDetails = async (reportId) => {
 export const modifyReportStatus = async (reportId, status) => {
   // Add validation to ensure status is one of the allowed enum values
   if (!['PENDING', 'RESOLVED', 'ACTION_TAKEN'].includes(status)) {
-    throw new Error('Invalid status provided.');
+    throw new AppError('Invalid status provided.', 400);
   }
 
   return prisma.userReport.update({
@@ -291,7 +292,7 @@ export const sendNotificationToUser = async (userId, title, body) => {
   });
 
   if (!user || !user.fcmTokens || user.fcmTokens.length === 0) {
-    throw new Error('User does not have any registered devices for notifications.');
+    throw new AppError('User does not have any registered devices for notifications.', 404);
   }
 
   const message = {

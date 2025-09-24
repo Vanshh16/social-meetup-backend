@@ -1,4 +1,5 @@
 import prisma from "../config/db.js";
+import AppError from "../utils/appError.js";
 import { calculateAge } from "../utils/helper.js";
 import haversine from 'haversine-distance';
 
@@ -9,7 +10,7 @@ export const findMatchesForUser = async (userId) => {
   });
 
   if (!userMeetup) {
-    throw new Error("You must create a meet-up request to find matches.");
+    throw new AppError("You must create a meet-up request to find matches.", 400);
   }
 
   // 1. Get IDs of users to exclude
@@ -174,8 +175,8 @@ export const searchMeetupsByDistance = async (userId, criteria) => {
     const { userLat, userLon, radiusKm, ...otherCriteria } = criteria;
 
     if (!userLat || !userLon || !radiusKm) {
-        throw new Error("User coordinates and a search radius are required.");
-    }
+    throw new AppError("User coordinates and a search radius are required.", 400);
+  }
 
     // 1. Get IDs of users to exclude (blocked users)
     const usersIHaveBlocked = await prisma.userBlock.findMany({

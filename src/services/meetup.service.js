@@ -1,6 +1,10 @@
-// import prisma from "../config/db";
-import crypto from 'crypto';
+// import { Cashfree } from 'cashfree-pg';
 import prisma from '../config/db.js';
+import AppError from '../utils/appError.js';
+
+/**
+ * Create a new meetup
+ */
 export const createMeetup = async (userId, data) => {
   return await prisma.meetup.create({
     data: {
@@ -21,8 +25,14 @@ export const createMeetup = async (userId, data) => {
   });
 };
 
+/**
+ * Get all meetups created by a specific user
+ */
 export const getUserMeetups = async (userId) => {
-  return await prisma.meetup.findMany({ where: { id: userId } });
+  return prisma.meetup.findMany({
+    where: { createdBy: userId },
+    orderBy: { createdAt: "desc" },
+  });
 };
 
 const verifyCashfreePayment = async (orderId) => {
@@ -35,17 +45,18 @@ const verifyCashfreePayment = async (orderId) => {
     }
 };
 
+/**
+ * Verify payment and create meetup in a transaction
+ */
 export const verifyPaymentAndCreateMeetup = async (userId, meetupData, paymentDetails) => {
     const { order_id } = paymentDetails;
 
     // const isVerified = await verifyCashfreePayment(order_id);
-    // if (!isVerified) {
-    //     throw new Error("Payment verification failed.");
-    // }
+    // if (!isVerified) throw new AppError("Payment verification failed.", 400);
 
     if (!meetupData.latitude || !meetupData.longitude) {
-        throw new Error("Latitude and longitude are required to create a meetup.");
-    }
+    throw new AppError("Latitude and longitude are required to create a meetup.", 400);
+  }
     
     return prisma.$transaction(async (tx) => {
         // const payment = await tx.payment.update({
@@ -69,6 +80,9 @@ export const verifyPaymentAndCreateMeetup = async (userId, meetupData, paymentDe
     });
 };
 
+/**
+ * Fetch full details of a single meetup
+ */
 export const fetchMeetupDetails = async (meetupId, userId) => {
   // Logic to get full details of a single meetup
   const meetup = await prisma.meetup.findUnique({
@@ -88,14 +102,14 @@ export const fetchMeetupDetails = async (meetupId, userId) => {
     }
   });
 
-  if (!meetup) {
-    // throw new Error('Meetup not found.');
-    throw new AppError('Meetup not found.', 404);
-  }
+  if (!meetup) throw new AppError("Meetup not found.", 404);
 
   return meetup;
 };
 
+/**
+ * Fetch history of meetups a user created or joined
+ */
 export const fetchMeetupHistory = async (userId) => {
   // Fetch meetups created by the user OR meetups they have an accepted request for
   return prisma.meetup.findMany({
@@ -116,12 +130,16 @@ export const fetchMeetupHistory = async (userId) => {
   });
 };
 
+
+/**
+ * Update meetup (only creator can update)
+ */
 export const updateMeetup = async (meetupId, userId, updateData) => {
   const meetup = await prisma.meetup.findUnique({ where: { id: meetupId } });
 
   // Authorization check: Only the creator can edit
   if (!meetup || meetup.createdBy !== userId) {
-    throw new Error('Meetup not found or you are not authorized to edit it.');
+    throw new AppError("Meetup not found or you are not authorized to edit it.", 403);
   }
 
   return prisma.meetup.update({
@@ -130,12 +148,15 @@ export const updateMeetup = async (meetupId, userId, updateData) => {
   });
 };
 
+/**
+ * Delete meetup and related entities (only creator can delete)
+ */
 export const deleteMeetup = async (meetupId, userId) => {
   const meetup = await prisma.meetup.findUnique({ where: { id: meetupId } });
 
   // Authorization check: Only the creator can delete
   if (!meetup || meetup.createdBy !== userId) {
-    throw new Error('Meetup not found or you are not authorized to delete it.');
+    throw new AppError('Meetup not found or you are not authorized to delete it.', 403);
   }
 
   // Use a transaction to delete the meetup and all related join requests
@@ -155,20 +176,3 @@ export const deleteMeetup = async (meetupId, userId) => {
     });
   });
 };
-
-// {
-//           "meetupData": {
-//             "category": "Food & Drink",
-//             "subcategory": "Coffee",
-//             "locationName": "Starbucks, Hazratganj",
-//             "latitude": 26.8523,
-//             "longitude": 80.9427,
-//             "type": "planned",
-//             "date": "2025-10-20T00:00:00.000Z",
-//             "time": "18:00",
-//             "groupSize": 2
-//           },
-//           "paymentDetails": {
-//             "order_id": "{{order_id}}"
-//           }
-//         }

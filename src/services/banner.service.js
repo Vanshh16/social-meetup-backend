@@ -6,6 +6,9 @@ import prisma from "../config/db.js";
  * @param {string} imageUrl - The URL of the uploaded image.
  */
 export const createBanner = async (title, imageUrl) => {
+  if (!title || !imageUrl) {
+    throw new AppError("Title and image URL are required.", 400);
+  }
   return prisma.banner.create({
     data: {
       title,
@@ -20,7 +23,7 @@ export const createBanner = async (title, imageUrl) => {
 export const getActiveBanners = async () => {
   return prisma.banner.findMany({
     where: { isActive: true },
-    orderBy: { createdAt: 'desc' },
+    orderBy: { createdAt: "desc" },
   });
 };
 
@@ -29,7 +32,15 @@ export const getActiveBanners = async () => {
  * @param {string} bannerId - The ID of the banner to delete.
  */
 export const deleteBanner = async (bannerId) => {
-  return prisma.banner.delete({
-    where: { id: bannerId },
-  });
+  try {
+    return await prisma.banner.delete({
+      where: { id: bannerId },
+    });
+  } catch (err) {
+    // Prisma throws if record doesn't exist
+    if (err.code === "P2025") {
+      throw new AppError("Banner not found.", 404);
+    }
+    throw err; // unexpected error → 500
+  }
 };

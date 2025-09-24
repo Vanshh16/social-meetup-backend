@@ -1,4 +1,5 @@
 import prisma from '../config/db.js';
+import AppError from '../utils/appError.js';
 
 export const createReport = async (reporterId, reportedId, reason, details) => {
   if (reporterId === reportedId) {
@@ -8,7 +9,7 @@ export const createReport = async (reporterId, reportedId, reason, details) => {
   // Verify the user being reported exists
   const reportedUser = await prisma.user.findUnique({ where: { id: reportedId } });
   if (!reportedUser) {
-    throw new Error('User to be reported not found.');
+    throw new AppError('User to be reported not found.', 404);
   }
 
   return prisma.userReport.create({

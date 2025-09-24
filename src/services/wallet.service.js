@@ -1,4 +1,5 @@
 import prisma from '../config/db.js';
+import AppError from '../utils/appError.js';
 
 /**
  * Fetches the wallet details, including balance and recent transactions, for a specific user.
@@ -18,7 +19,7 @@ export const fetchWalletDetails = async (userId) => {
   });
 
   if (!wallet) {
-    throw new Error('Wallet not found for this user.');
+    throw new AppError('Wallet not found for this user.', 404);
   }
 
   return wallet;
@@ -34,7 +35,7 @@ export const fetchWalletTransactions = async (userId) => {
   });
 
   if (!wallet) {
-    throw new Error('Wallet not found for this user.');
+    throw new AppError('Wallet not found for this user.', 404);
   }
 
   return prisma.walletTransaction.findMany({

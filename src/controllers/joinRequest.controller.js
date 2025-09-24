@@ -1,6 +1,6 @@
 import { createJoinRequest, getMeetupRequests, respondToRequest } from "../services/joinRequest.service.js";
 
-export const sendJoinRequest = async (req, res) => {
+export const sendJoinRequest = async (req, res, next) => {
   try {
     const { meetupId } = req.params;
     const request = await createJoinRequest(
@@ -9,11 +9,12 @@ export const sendJoinRequest = async (req, res) => {
     );
     res.status(201).json(request);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    // res.status(400).json({ error: err.message });
+    next(err);
   }
 };
 
-export const listMeetupRequests = async (req, res) => {
+export const listMeetupRequests = async (req, res, next) => {
   try {
     const { meetupId } = req.params;
     const requests = await getMeetupRequests(
@@ -22,11 +23,12 @@ export const listMeetupRequests = async (req, res) => {
     );
     res.json(requests);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    // res.status(400).json({ error: err.message });
+    next(err);
   }
 };
 
-export const respondToJoinRequest = async (req, res) => {
+export const respondToJoinRequest = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { action } = req.body; // "accept" | "reject"
@@ -37,6 +39,7 @@ export const respondToJoinRequest = async (req, res) => {
     );
     res.json(request);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    // res.status(400).json({ error: err.message });
+    next(err);
   }
 };

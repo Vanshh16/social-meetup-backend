@@ -1,13 +1,17 @@
 import prisma from "../config/db.js";
 import { hashPassword, comparePasswords } from "../utils/password.js";
 import { fetchReferralReward } from "./admin.service.js";
-import twilio from 'twilio';
-import { OAuth2Client } from 'google-auth-library';
+import twilio from "twilio";
+import { OAuth2Client } from "google-auth-library";
 import { generateReferralCode } from "../utils/helper.js";
+import AppError from "../utils/appError.js";
 
 // --- Setup Clients ---
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+const twilioClient = twilio(
+  process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN
+);
 const twilioVerifyServiceSid = process.env.TWILIO_VERIFY_SID;
 
 /**
@@ -23,12 +27,12 @@ export const loginOrSignupWithGoogle = async (idToken) => {
     audience: process.env.GOOGLE_CLIENT_ID,
   });
   console.log("ticket: ", ticket);
-  
+
   const payload = ticket.getPayload();
 
   console.log("payload: ", payload);
   if (!payload || !payload.email) {
-    throw new Error('Invalid Google token.');
+    throw new AppError("Invalid Google token.", 401);
   }
 
   // Check if user already exists
@@ -40,10 +44,10 @@ export const loginOrSignupWithGoogle = async (idToken) => {
   if (user) {
     // If user exists but signed up with mobile, link their Google ID
     if (!user.googleId) {
-        user = await prisma.user.update({
-            where: { id: user.id },
-            data: { googleId: payload.sub }
-        });
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { googleId: payload.sub },
+      });
     }
   } else {
     // Create a new user with details from Google
@@ -53,7 +57,7 @@ export const loginOrSignupWithGoogle = async (idToken) => {
         email: payload.email,
         googleId: payload.sub, // The unique Google ID
         profilePhoto: payload.picture,
-        authMethod: 'GOOGLE',
+        authMethod: "GOOGLE",
         isVerified: true, // Google accounts are pre-verified
         referralCode: generateReferralCode(payload.name),
       },
@@ -64,7 +68,6 @@ export const loginOrSignupWithGoogle = async (idToken) => {
 
   return user;
 };
-
 
 /**
  * Initiates login or signup with mobile OTP.
@@ -100,7 +103,7 @@ export const loginOrSignupWithGoogle = async (idToken) => {
 //   await twilioClient.verify.v2.services(twilioVerifyServiceSid)
 //     .verifications
 //     .create({ to: `+91${mobileNumber}`, channel: 'sms' });
-    
+
 //   return `OTP sent to ${mobileNumber}`;
 // };
 
@@ -119,7 +122,7 @@ export const sendOtpForLoginOrSignup = async (mobileNumber) => {
         name: tempName,
         email: tempEmail,
         mobileNumber: mobileNumber,
-        authMethod: 'MOBILE_OTP',
+        authMethod: "MOBILE_OTP",
         isVerified: false,
         referralCode: generateReferralCode(tempName),
       },
@@ -132,7 +135,7 @@ export const sendOtpForLoginOrSignup = async (mobileNumber) => {
   // await twilioClient.verify.v2.services(twilioVerifyServiceSid)
   //   .verifications
   //   .create({ to: `+91${mobileNumber}`, channel: 'sms' });
-    
+
   return `OTP sent to ${mobileNumber}`;
 };
 
@@ -147,17 +150,16 @@ export const verifyOtpAndLogin = async (mobileNumber, otp) => {
   //   .verificationChecks
   //   .create({ to: `+91${mobileNumber}`, code: otp });
 
-  if (otp === '123456') {
+  if (otp === "123456") {
     const user = await prisma.user.update({
       where: { mobileNumber },
       data: { isVerified: true },
     });
     return user;
   } else {
-    throw new Error('Invalid OTP. Please try again.');
+    throw new AppError("Invalid OTP. Please try again.", 401);
   }
 };
-
 
 /**
  * Allows a user to complete their profile after signing up.
@@ -179,12 +181,14 @@ const creditReferrerWallet = async (referrerId) => {
   const rewardAmount = await fetchReferralReward();
 
   if (rewardAmount <= 0) {
-    console.log('Referral reward is 0 or not set. Skipping credit.');
+    console.log("Referral reward is 0 or not set. Skipping credit.");
     return;
   }
 
   return prisma.$transaction(async (tx) => {
-    const wallet = await tx.userWallet.findUnique({ where: { userId: referrerId } });
+    const wallet = await tx.userWallet.findUnique({
+      where: { userId: referrerId },
+    });
     if (!wallet) return; // Referrer has no wallet, skip
 
     await tx.userWallet.update({
@@ -196,8 +200,8 @@ const creditReferrerWallet = async (referrerId) => {
       data: {
         walletId: wallet.id,
         amount: rewardAmount,
-        type: 'CREDIT',
-        description: 'Credit for successful referral',
+        type: "CREDIT",
+        description: "Credit for successful referral",
       },
     });
   });
