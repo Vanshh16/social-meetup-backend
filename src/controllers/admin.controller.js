@@ -15,6 +15,7 @@ import {
   fetchAllSettings,
   updateSettings,
   sendNotificationToUser,
+  sendNotificationToMultipleUsers,
 } from "../services/admin.service.js";
 
 export const getAllUsers = async (req, res, next) => {
@@ -201,4 +202,17 @@ export const sendNotificationController = async (req, res, next) => {
     // res.status(200).json({ success: false, message: error.message });
     next(error);
   }
+};
+
+export const sendBulkNotificationController = async (req, res, next) => {
+    try {
+        const { userIds, title, body } = req.body; // Expect an array of user IDs
+        if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+            throw new AppError('An array of userIds is required.', 400);
+        }
+        const result = await sendNotificationToMultipleUsers(userIds, title, body);
+        res.status(200).json({ success: true, data: result });
+    } catch (error) {
+        next(error);
+    }
 };

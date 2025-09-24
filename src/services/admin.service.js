@@ -1,5 +1,5 @@
 import prisma from '../config/db.js';
-import admin from '../config/firebase.js';
+import { messaging } from '../config/firebase.js';
 import AppError from '../utils/appError.js';
 
 /**
@@ -280,7 +280,7 @@ export const updateSettings = async (settings) => {
 };
 
 /**
- * Sends a push notification to a specific user.
+ * Sends a push notification to a SINGLE user's devices.
  * @param {string} userId - The ID of the user to notify.
  * @param {string} title - The title of the notification.
  * @param {string} body - The message content of the notification.
@@ -296,19 +296,73 @@ export const sendNotificationToUser = async (userId, title, body) => {
   }
 
   const message = {
-    notification: {
-      title,
-      body,
-    },
+    notification: { title, body },
     tokens: user.fcmTokens,
   };
 
   try {
-    const response = await admin.messaging().sendMulticast(message);
-    console.log('Successfully sent message:', response);
+    const response = await messaging.sendEachForMulticast(message);
+    // if (response.data.failureCount > 0) {
+    //     const failedTokens = [];
+    //     response.responses.forEach((resp, idx) => {
+    //         if (!resp.success) {
+    //             failedTokens.push(user.fcmTokens[idx]);
+    //         }
+    //     });
+    //     console.log('List of tokens that caused failures: ' + failedTokens);
+    // }
+    // console.log('Successfully sent message:', response);
     return { success: true, ...response };
   } catch (error) {
     console.error('Error sending message:', error);
     throw new Error('Failed to send notification.');
+  }
+};
+
+/**
+ * Sends a push notification to MULTIPLE users.
+ * @param {string[]} userIds - An array of user IDs to notify.
+ * @param {string} title - The title of the notification.
+ * @param {string} body - The message content of the notification.
+ */
+export const sendNotificationToMultipleUsers = async (userIds, title, body) => {
+  // 1. Fetch all FCM tokens for the given user IDs
+  const users = await prisma.user.findMany({
+    where: {
+      id: { in: userIds },
+      fcmTokens: { isEmpty: false }, // Only get users with tokens
+    },
+    select: { fcmTokens: true },
+  });
+
+  // 2. Combine all tokens into a single flat array
+  const allTokens = users.flatMap(user => user.fcmTokens);
+
+  if (allTokens.length === 0) {
+    throw new AppError('None of the selected users have registered devices.', 404);
+  }
+
+  // 3. Send the notification to all tokens
+  const message = {
+    notification: { title, body },
+    tokens: allTokens,
+  };
+
+  try {
+    const response = await messaging.sendEachForMulticast(message);
+    if (response.data.failureCount > 0) {
+        const failedTokens = [];
+        response.responses.forEach((resp, idx) => {
+            if (!resp.success) {
+                failedTokens.push(user.fcmTokens[idx]);
+            }
+        });
+        // console.log('List of tokens that caused failures: ' + failedTokens);
+    }
+    console.log('Successfully sent bulk message:', response);
+    return { success: true, ...response };
+  } catch (error) {
+    console.error('Error sending bulk message:', error);
+    throw new Error('Failed to send bulk notification.');
   }
 };

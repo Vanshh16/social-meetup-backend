@@ -1,9 +1,11 @@
-import admin from 'firebase-admin';
+import { cert, initializeApp } from "firebase-admin/app";
+import { getMessaging } from "firebase-admin/messaging";
+
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
+const app = initializeApp({
+  credential: cert(serviceAccount),
 });
 
-export default admin;
+// Get the messaging service from the initialized app and export it directly
+export const messaging = getMessaging(app);
