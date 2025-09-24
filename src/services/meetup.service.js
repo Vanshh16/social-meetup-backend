@@ -89,7 +89,8 @@ export const fetchMeetupDetails = async (meetupId, userId) => {
   });
 
   if (!meetup) {
-    throw new Error('Meetup not found.');
+    // throw new Error('Meetup not found.');
+    throw new AppError('Meetup not found.', 404);
   }
 
   return meetup;

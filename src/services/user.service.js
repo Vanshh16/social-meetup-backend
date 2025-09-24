@@ -1,6 +1,6 @@
-import prisma from '../config/db.js';
-import { calculateAge } from '../utils/helper.js';
-
+import prisma from "../config/db.js";
+import AppError from "../utils/appError.js";
+import { calculateAge } from "../utils/helper.js";
 
 /**
  * Fetches a public profile for a given user.
@@ -18,10 +18,11 @@ export const getUserProfile = async (userId) => {
       bio: true,
       hobbies: true,
       pictures: true,
-      dateOfBirth: true, 
-      Meetup: { // Include the meetups created by this user
+      dateOfBirth: true,
+      Meetup: {
+        // Include the meetups created by this user
         orderBy: {
-          createdAt: 'desc',
+          createdAt: "desc",
         },
         take: 5, // Limit to the 5 most recent meetups
       },
@@ -29,7 +30,7 @@ export const getUserProfile = async (userId) => {
   });
 
   if (!user) {
-    throw new Error('User not found.');
+    throw new AppError("User not found.", 404);
   }
 
   // Calculate age and remove the dateOfBirth from the final object for privacy
@@ -38,7 +39,6 @@ export const getUserProfile = async (userId) => {
 
   return userProfile;
 };
-
 
 /**
  * Adds an FCM token to a user's record, ensuring no duplicates.
@@ -52,7 +52,7 @@ export const registerFcmToken = async (userId, fcmToken) => {
   });
 
   if (!user) {
-    throw new Error('User not found.');
+    throw new AppError("User not found.", 404);
   }
 
   // Add the new token only if it's not already in the list
@@ -67,7 +67,7 @@ export const registerFcmToken = async (userId, fcmToken) => {
 
 export const blockUser = async (blockerId, blockedId) => {
   if (blockerId === blockedId) {
-    throw new Error('You cannot block yourself.');
+    throw new AppError("You cannot block yourself.", 400);
   }
   return prisma.userBlock.create({
     data: {
@@ -78,14 +78,15 @@ export const blockUser = async (blockerId, blockedId) => {
 };
 
 export const unblockUser = async (blockerId, blockedId) => {
-  return prisma.userBlock.delete({
-    where: {
-      blockerId_blockedId: {
-        blockerId,
-        blockedId,
+  try {
+    return await prisma.userBlock.delete({
+      where: {
+        blockerId_blockedId: { blockerId, blockedId },
       },
-    },
-  });
+    });
+  } catch (err) {
+    throw new AppError("Block record not found.", 404);
+  }
 };
 
 export const getBlockedUsers = async (blockerId) => {

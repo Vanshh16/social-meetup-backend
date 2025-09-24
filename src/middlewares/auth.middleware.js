@@ -1,3 +1,4 @@
+import AppError from '../utils/appError.js';
 import { verifyToken } from '../utils/jwt.js';
 
 export const requireAuth = (req, res, next) => {
@@ -10,7 +11,7 @@ export const requireAuth = (req, res, next) => {
     req.user = decoded; // decoded -> userId
     next();
   } catch (err) {
-    res.status(403).json({ error: 'Invalid or expired token' });
+    next(new AppError('Invalid or expired token', 403));
   }
 };
 
@@ -23,7 +24,6 @@ export const requireRole = (roles = []) => {
       
       return res.status(403).json({ error: "Forbidden: insufficient rights" });
     }
-
     next();
   };
 };

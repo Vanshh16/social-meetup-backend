@@ -23,3 +23,26 @@ const storage = new CloudinaryStorage({
 const upload = multer({ storage: storage });
 
 export default upload;
+
+// --- Storage for User Profile Pictures ---
+const profileStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'social-meetup-profiles',
+    allowed_formats: ['jpg', 'jpeg', 'png'],
+    public_id: (req, file) => `user-${req.user.id}-${Date.now()}`,
+  },
+});
+export const profileUpload = multer({ storage: profileStorage });
+
+
+// --- NEW: Storage for Banners ---
+const bannerStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'banners', // Store banners in a separate folder
+    allowed_formats: ['jpg', 'jpeg', 'png', 'gif'],
+    public_id: (req, file) => `banner-${Date.now()}`,
+  },
+});
+export const bannerUpload = multer({ storage: bannerStorage });

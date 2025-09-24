@@ -16,6 +16,8 @@ import walletRoutes from './routes/wallet.routes.js';
 import reportRoutes from './routes/report.routes.js';
 import userRoutes from './routes/user.routes.js';
 import uploadRoutes from './routes/upload.routes.js';
+import bannerRoutes from './routes/banner.routes.js';
+import { errorHandler } from './middlewares/errorHandler.js';
 
 dotenv.config();
 
@@ -38,6 +40,9 @@ app.use('/api/v1/wallet', walletRoutes);
 app.use('/api/v1/reports', reportRoutes);
 app.use('/api/v1/user', userRoutes);
 app.use('/api/v1/uploads', uploadRoutes);
+app.use('/api/v1/banners', bannerRoutes);
+
+app.use(errorHandler);
 
 app.get('/', (req, res) => res.send('API Running'));
 
