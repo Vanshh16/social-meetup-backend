@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../middlewares/auth.middleware.js';
-import upload from '../config/cloudinary.js';
+import { profileUpload } from '../config/cloudinary.js';
 import { uploadProfilePhoto, uploadUserPictures } from '../controllers/upload.controller.js';
 
 const router = Router();
@@ -10,7 +10,7 @@ const router = Router();
 router.post(
   '/profile-photo',
   requireAuth,
-  upload.single('profilePhoto'),
+  profileUpload.single('profilePhoto'),
   uploadProfilePhoto
 );
 
@@ -19,7 +19,7 @@ router.post(
 router.post(
   '/pictures',
   requireAuth,
-  upload.array('pictures', 2), // 'pictures' is the field name, 2 is the max count
+  profileUpload.array('pictures', 2), // 'pictures' is the field name, 2 is the max count
   uploadUserPictures
 );
 

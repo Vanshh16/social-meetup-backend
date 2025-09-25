@@ -1,11 +1,7 @@
 import { Router } from 'express';
 import { requireAuth, requireRole } from '../middlewares/auth.middleware.js';
 import { bannerUpload } from '../config/cloudinary.js';
-import { 
-    createBannerController, 
-    deleteBannerController,
-    getBannersController 
-} from '../controllers/banner.controller.js';
+import { createBannerController, deleteBannerController, getBannersController } from '../controllers/banner.controller.js';
 
 const router = Router();
 
