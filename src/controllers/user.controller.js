@@ -1,4 +1,22 @@
-import { blockUser, unblockUser, getBlockedUsers, registerFcmToken, getUserProfile } from '../services/user.service.js';
+import { blockUser, unblockUser, getBlockedUsers, registerFcmToken, getUserProfile, updateMyProfile, getMyProfile } from '../services/user.service.js';
+
+export const getMyProfileController = async (req, res, next) => {
+  try {
+    const userProfile = await getMyProfile(req.user.id);
+    res.status(200).json({ success: true, data: userProfile });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateMyProfileController = async (req, res, next) => {
+  try {
+    const updatedUser = await updateMyProfile(req.user.id, req.body);
+    res.status(200).json({ success: true, data: updatedUser });
+  } catch (error) {
+    next(error);
+  }
+};
 
 export const getUserProfileController = async (req, res, next) => {
   try {

@@ -148,6 +148,7 @@ export const searchMeetups = async (userId, criteria) => {
                     hobbies: true,
                     city: true,
                     dateOfBirth: true,
+                    pictures: true,
                 },
             },
         },

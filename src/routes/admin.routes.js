@@ -18,6 +18,7 @@ import {
   updateAllSettings,
   sendNotificationController,
   sendBulkNotificationController,
+  sendGlobalNotificationController,
 } from '../controllers/admin.controller.js';
 
 const router = Router();
@@ -55,5 +56,6 @@ router.get('/stats/dashboard', getDashboardStats);
 // --- Notifications ---
 router.post('/users/:userId/notify', sendNotificationController);
 router.post('/users/notify/bulk', sendBulkNotificationController);
+router.post('/notify/all', sendGlobalNotificationController);
 
 export default router;
