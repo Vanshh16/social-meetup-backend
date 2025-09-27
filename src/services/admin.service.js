@@ -1,3 +1,4 @@
+import { Parser } from "json2csv";
 import prisma from "../config/db.js";
 import { messaging } from "../config/firebase.js";
 import AppError from "../utils/appError.js";
@@ -456,4 +457,254 @@ export const sendNotificationToAllUsers = async (title, body) => {
     console.error("Error sending global announcement:", error);
     throw new Error("Failed to send global notification.");
   }
+};
+
+
+
+
+// ----------------------------- LATEST -----------------------------
+
+/**
+ * Searches and filters users based on admin criteria.
+ * @param {object} query - The search query (e.g., { search: 'Rahul', status: 'ACTIVE' }).
+ */
+export const searchUsers = async (query) => {
+    const whereClause = {};
+
+    if (query.search) {
+        whereClause.OR = [
+            { name: { contains: query.search, mode: 'insensitive' } },
+            { email: { contains: query.search, mode: 'insensitive' } },
+            { mobileNumber: { contains: query.search, mode: 'insensitive' } },
+        ];
+    }
+
+    if (query.status) {
+        if (query.status === 'ACTIVE') whereClause.isSuspended = false;
+        if (query.status === 'SUSPENDED') whereClause.isSuspended = true;
+        // Add more status filters as needed (e.g., PENDING for !isVerified)
+    }
+
+    return prisma.user.findMany({
+        where: whereClause,
+        select: {
+            id: true,
+            name: true,
+            email: true,
+            mobileNumber: true,
+            isVerified: true,
+            isSuspended: true, // Assuming you add this to your schema
+            createdAt: true,
+        },
+    });
+};
+
+/**
+ * Creates a new user from the admin panel.
+ * @param {object} userData - The data for the new user.
+ */
+export const createUserByAdmin = async (userData) => {
+    // You might want to add password generation logic here
+    return prisma.user.create({
+        data: {
+            ...userData,
+            authMethod: 'MOBILE_OTP' // Or a default method
+        },
+    });
+};
+
+/**
+ * Exports the current user list to a CSV format.
+ */
+export const exportUsersToCsv = async () => {
+    const users = await prisma.user.findMany({
+        select: {
+            id: true,
+            name: true,
+            email: true,
+            mobileNumber: true,
+            isVerified: true,
+            isSuspended: true,
+            createdAt: true,
+        },
+    });
+
+    const json2csvParser = new Parser();
+    const csv = json2csvParser.parse(users);
+    return csv;
+};
+
+/**
+ * Fetches all meetups with optional filtering for the admin panel.
+ * @param {object} query - The filter query (e.g., { status: 'PENDING' }).
+ */
+export const fetchAllMeetups = async (query) => {
+    const whereClause = {};
+
+    // Example filter by status (you can add more for date, category, etc.)
+    if (query.status) {
+        whereClause.status = query.status.toUpperCase();
+    }
+
+    return prisma.meetup.findMany({
+        where: whereClause,
+        include: {
+            user: { select: { name: true } }, // Creator's name
+            _count: { select: { JoinRequest: true } } // Count of participants
+        },
+        orderBy: { createdAt: 'desc' }
+    });
+};
+
+/**
+ * Creates a new meetup from the admin panel.
+ * @param {object} meetupData - The data for the new meetup.
+ */
+export const scheduleMeetupByAdmin = async (meetupData) => {
+    // You'll need to decide which user to assign as the creator,
+    // or you could have a generic "system" user for admin-created meetups.
+    if (!meetupData.createdBy) {
+        throw new AppError("A 'createdBy' userId is required to schedule a meetup.", 400);
+    }
+    return prisma.meetup.create({
+        data: meetupData,
+    });
+};
+
+/**
+ * Fetches reward statistics for the admin dashboard.
+ */
+export const getRewardStats = async () => {
+    // These would be more complex aggregate queries in a real scenario
+    const totalRewardsPaid = await prisma.walletTransaction.aggregate({
+        _sum: { amount: true },
+        where: { type: 'REWARD' },
+    });
+
+    const referralRewards = await prisma.walletTransaction.aggregate({
+        _sum: { amount: true },
+        where: { type: 'REWARD', description: { contains: 'referral' } },
+    });
+
+    // You would add a similar query for meetup completion rewards once implemented.
+    const meetupRewards = 0; // Placeholder
+
+    return {
+        totalRewardsPaid: totalRewardsPaid._sum.amount || 0,
+        referralRewards: referralRewards._sum.amount || 0,
+        meetupRewards: meetupRewards,
+    };
+};
+
+/**
+ * Fetches the history of reward price changes.
+ * This would require a dedicated audit log model to be fully implemented.
+ * For now, we return a placeholder.
+ */
+export const getRewardHistory = async () => {
+    // Placeholder - A real implementation would query an audit log table.
+    return [
+        { date: '2025-09-15', rewardType: 'Referral Reward', previousAmount: 10, newAmount: 5, changedBy: 'Admin', reason: 'Cost optimization' }
+    ];
+};
+
+/**
+ * Fetches key statistics for the referral dashboard.
+ */
+export const getReferralStats = async () => {
+    const totalReferrals = await prisma.user.count({
+        where: { referredById: { not: null } },
+    });
+
+    const successfulReferrals = await prisma.user.count({
+        where: {
+            referredById: { not: null },
+            isVerified: true,
+        },
+    });
+
+    const totalRewardsPaid = await prisma.walletTransaction.aggregate({
+        _sum: { amount: true },
+        where: {
+            type: 'REWARD',
+            description: { contains: 'referral' },
+        },
+    });
+
+    // This is a more complex query to find the top referrer
+    const topReferrers = await prisma.user.groupBy({
+        by: ['referredById'],
+        _count: {
+            referredById: true,
+        },
+        where: { referredById: { not: null } },
+        orderBy: {
+            _count: {
+                referredById: 'desc',
+            },
+        },
+        take: 1,
+    });
+
+    let topReferrerData = null;
+    if (topReferrers.length > 0) {
+        const topReferrerUser = await prisma.user.findUnique({
+            where: { id: topReferrers[0].referredById },
+            select: { name: true },
+        });
+        topReferrerData = {
+            name: topReferrerUser.name,
+            count: topReferrers[0]._count.referredById,
+        };
+    }
+
+    return {
+        totalReferrals,
+        successfulReferrals,
+        totalRewardsPaid: totalRewardsPaid._sum.amount || 0,
+        topReferrer: topReferrerData,
+    };
+};
+
+/**
+ * Fetches the detailed history of all referrals.
+ */
+export const getReferralHistory = async (query) => {
+    const whereClause = {
+        referredById: { not: null }
+    };
+
+    // Example filter by status
+    if (query.status === 'COMPLETED') whereClause.isVerified = true;
+    if (query.status === 'PENDING') whereClause.isVerified = false;
+
+    const referredUsers = await prisma.user.findMany({
+        where: whereClause,
+        select: {
+            id: true,
+            name: true,
+            createdAt: true,
+            isVerified: true,
+            referredById: true,
+        },
+        orderBy: { createdAt: 'desc' }
+    });
+
+    // Now, fetch the referrer details for each
+    const referrerIds = [...new Set(referredUsers.map(u => u.referredById))];
+    const referrers = await prisma.user.findMany({
+        where: { id: { in: referrerIds } },
+        select: { id: true, name: true }
+    });
+    
+    const referrersMap = new Map(referrers.map(r => [r.id, r]));
+
+    return referredUsers.map(user => ({
+        referredUser: { id: user.id, name: user.name },
+        referrer: referrersMap.get(user.referredById),
+        date: user.createdAt,
+        status: user.isVerified ? 'COMPLETED' : 'PENDING VERIFICATION',
+        // You would look up the reward amount from the transaction table in a full implementation
+        rewardAmount: user.isVerified ? 5 : 0, // Placeholder
+    }));
 };

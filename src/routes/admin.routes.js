@@ -21,6 +21,16 @@ import {
   sendGlobalNotificationController,
   issueRewardController,
   debitWalletController,
+  getAllMeetupsController,
+  scheduleMeetupController,
+  editMeetupByAdminController,
+  searchUsersController,
+  createUserController,
+  exportUsersController,
+  getRewardStatsController,
+  getRewardHistoryController,
+  getReferralStatsController,
+  getReferralHistoryController,
 } from '../controllers/admin.controller.js';
 
 const router = Router();
@@ -48,8 +58,8 @@ router.get('/reports/:id', getReportDetails);
 router.put('/reports/:id/status', updateReportStatus);
 
 // --- App-Wide Settings ---
-router.get('/settings', getAllSettings);
-router.put('/settings', updateAllSettings);
+// router.get('/settings', getAllSettings);
+// router.put('/settings', updateAllSettings);
 
 // --- Analytics ---
 router.get('/stats/dashboard', getDashboardStats);
@@ -63,5 +73,31 @@ router.post('/notify/all', sendGlobalNotificationController);
 router.post('/users/:userId/wallet/credit', creditUserWallet);
 router.post('/users/:userId/wallet/reward', issueRewardController);
 router.post('/users/:userId/wallet/debit', debitWalletController);
+
+
+
+// // -----------------------LATESTTTT -----------------
+
+// --- User Management ---
+router.get('/users', searchUsersController); // This now handles both getting all users and searching
+router.post('/users', createUserController);
+router.get('/users/export', exportUsersController);
+router.put('/users/:userId/status', updateUserStatus);
+
+// --- Meetup Management ---
+router.get('/meetups', getAllMeetupsController);
+router.post('/meetups', scheduleMeetupController);
+router.put('/meetups/:id', editMeetupByAdminController);
+
+// --- Settings & Rewards ---
+router.get('/settings', getAllSettings);
+router.put('/settings', updateAllSettings); // Reused for all reward settings
+
+router.get('/rewards/stats', getRewardStatsController);
+router.get('/rewards/history', getRewardHistoryController);
+
+// --- Referral Tracking ---
+router.get('/referrals/stats', getReferralStatsController);
+router.get('/referrals/history', getReferralHistoryController);
 
 export default router;

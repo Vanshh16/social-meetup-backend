@@ -23,6 +23,7 @@
     "firebase-admin": "^13.5.0",
     "google-auth-library": "^10.3.0",
     "haversine-distance": "^1.2.4",
+    "json2csv": "^6.0.0-alpha.2",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
     "multer": "^2.0.2",

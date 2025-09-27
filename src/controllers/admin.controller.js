@@ -19,7 +19,17 @@ import {
   sendNotificationToAllUsers,
   manuallyDebitWallet,
   issueRewardToWallet,
+  searchUsers,
+  createUserByAdmin,
+  exportUsersToCsv,
+  scheduleMeetupByAdmin,
+  fetchAllMeetups,
+  getRewardHistory,
+  getRewardStats,
+  getReferralStats,
+  getReferralHistory,
 } from "../services/admin.service.js";
+import { updateMeetup } from '../services/meetup.service.js'; // Reusing user-facing service
 import AppError from "../utils/appError.js";
 
 export const getAllUsers = async (req, res, next) => {
@@ -245,6 +255,108 @@ export const sendGlobalNotificationController = async (req, res, next) => {
         const { title, body } = req.body;
         const result = await sendNotificationToAllUsers(title, body);
         res.status(200).json({ success: true, data: result });
+    } catch (error) {
+        next(error);
+    }
+};
+
+
+
+
+// ------------------ LATEST -----------------------
+
+
+export const searchUsersController = async (req, res, next) => {
+    try {
+        const users = await searchUsers(req.query);
+        res.status(200).json({ success: true, data: users });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const createUserController = async (req, res, next) => {
+    try {
+        const newUser = await createUserByAdmin(req.body);
+        res.status(201).json({ success: true, data: newUser });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const exportUsersController = async (req, res, next) => {
+    try {
+        const csv = await exportUsersToCsv();
+        res.header('Content-Type', 'text/csv');
+        res.attachment('users.csv');
+        res.send(csv);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getAllMeetupsController = async (req, res, next) => {
+    try {
+        const meetups = await fetchAllMeetups(req.query);
+        res.status(200).json({ success: true, data: meetups });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const scheduleMeetupController = async (req, res, next) => {
+    try {
+        const newMeetup = await scheduleMeetupByAdmin(req.body);
+        res.status(201).json({ success: true, data: newMeetup });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// For editing, we can reuse the existing user-facing edit logic.
+// The admin has the rights, so we just need a controller.
+export const editMeetupByAdminController = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        // We pass req.user.id but the service won't use it for auth check if admin
+        const updatedMeetup = await updateMeetup(id, req.user.id, req.body);
+        res.status(200).json({ success: true, data: updatedMeetup });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getRewardStatsController = async (req, res, next) => {
+    try {
+        const stats = await getRewardStats();
+        res.status(200).json({ success: true, data: stats });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getRewardHistoryController = async (req, res, next) => {
+    try {
+        const history = await getRewardHistory();
+        res.status(200).json({ success: true, data: history });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getReferralStatsController = async (req, res, next) => {
+    try {
+        const stats = await getReferralStats();
+        res.status(200).json({ success: true, data: stats });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getReferralHistoryController = async (req, res, next) => {
+    try {
+        const history = await getReferralHistory(req.query);
+        res.status(200).json({ success: true, data: history });
     } catch (error) {
         next(error);
     }
