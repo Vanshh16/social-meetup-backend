@@ -19,6 +19,8 @@ import {
   sendNotificationController,
   sendBulkNotificationController,
   sendGlobalNotificationController,
+  issueRewardController,
+  debitWalletController,
 } from '../controllers/admin.controller.js';
 
 const router = Router();
@@ -39,7 +41,6 @@ router.delete('/categories/:id', deleteCategory);
 // --- Settings & Wallet Management ---
 router.get('/settings/referral-reward', getReferralReward);
 router.put('/settings/referral-reward', setReferralReward);
-router.post('/users/:userId/wallet/credit', creditUserWallet);
 
 // --- Report Management ---
 router.get('/reports', getReports);
@@ -57,5 +58,10 @@ router.get('/stats/dashboard', getDashboardStats);
 router.post('/users/:userId/notify', sendNotificationController);
 router.post('/users/notify/bulk', sendBulkNotificationController);
 router.post('/notify/all', sendGlobalNotificationController);
+
+// --- Wallet Management ---
+router.post('/users/:userId/wallet/credit', creditUserWallet);
+router.post('/users/:userId/wallet/reward', issueRewardController);
+router.post('/users/:userId/wallet/debit', debitWalletController);
 
 export default router;

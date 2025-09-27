@@ -17,6 +17,8 @@ import {
   sendNotificationToUser,
   sendNotificationToMultipleUsers,
   sendNotificationToAllUsers,
+  manuallyDebitWallet,
+  issueRewardToWallet,
 } from "../services/admin.service.js";
 import AppError from "../utils/appError.js";
 
@@ -126,6 +128,28 @@ export const creditUserWallet = async (req, res, next) => {
     // res.status(200).json({ success: false, message: error.message });
     next(error);
   }
+};
+
+export const issueRewardController = async (req, res, next) => {
+    try {
+        const { userId } = req.params;
+        const { amount, description } = req.body;
+        const transaction = await issueRewardToWallet({ userId, amount, description });
+        res.status(200).json({ success: true, data: transaction });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const debitWalletController = async (req, res, next) => {
+    try {
+        const { userId } = req.params;
+        const { amount, description } = req.body;
+        const transaction = await manuallyDebitWallet({ userId, amount, description });
+        res.status(200).json({ success: true, data: transaction });
+    } catch (error) {
+        next(error);
+    }
 };
 
 export const getReports = async (req, res, next) => {

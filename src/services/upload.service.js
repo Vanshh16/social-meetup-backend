@@ -41,7 +41,10 @@ export const addUserPictures = async (userId, imageUrls) => {
       throw new AppError('User not found.', 404);
     }
 
-    const updatedPictures = [...(user.pictures || []), ...imageUrls].slice(0, 2);
+    // const updatedPictures = [...(user.pictures || []), ...imageUrls].slice(0, 2);
+
+        // Replace old pictures with the new ones (up to 4)
+    const updatedPictures = imageUrls.slice(0, 4);
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },

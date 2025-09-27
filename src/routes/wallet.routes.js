@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../middlewares/auth.middleware.js';
-import { getWalletDetails, getWalletTransactions } from '../controllers/wallet.controller.js';
+import { getWalletDetails, getWalletTransactions, withdrawFromWallet } from '../controllers/wallet.controller.js';
 
 const router = Router();
 
@@ -13,4 +13,6 @@ router.get('/', getWalletDetails);
 // Get the full transaction history
 router.get('/transactions', getWalletTransactions);
 
+// Route for a user to withdraw from their wallet
+router.post('/withdraw', withdrawFromWallet);
 export default router;

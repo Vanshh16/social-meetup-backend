@@ -219,9 +219,15 @@ model WalletTransaction {
   walletId    String
   wallet      UserWallet @relation(fields: [walletId], references: [id])
   amount      Float
-  type        String   // "CREDIT" or "DEBIT"
+  type        TransactionType
   description String
   createdAt   DateTime @default(now())
+}
+
+enum TransactionType {
+  CREDIT  // Manual credit by admin
+  DEBIT   // Withdrawal or spending by user/admin
+  REWARD  // Automated or manual reward (e.g., referral)
 }
 
 model AppSettings {

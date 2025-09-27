@@ -14,12 +14,12 @@ router.post(
   uploadProfilePhoto
 );
 
-// Route to upload up to 2 additional pictures
+// Route to upload up to 4 additional pictures
 // The frontend should send the files with the field name 'pictures'
 router.post(
   '/pictures',
   requireAuth,
-  profileUpload.array('pictures', 2), // 'pictures' is the field name, 2 is the max count
+  profileUpload.array('pictures', 4), // 'pictures' is the field name, 4 is the max count
   uploadUserPictures
 );
 

@@ -149,6 +149,30 @@ export const manuallyCreditWallet = async ({ userId, amount, description }) => {
   });
 };
 
+// --- NEW: Function to issue a reward ---
+export const issueRewardToWallet = async ({ userId, amount, description }) => {
+  return prisma.$transaction(async (tx) => {
+    const wallet = await tx.userWallet.update({
+      where: { userId },
+      data: { balance: { increment: amount } },
+    });
+    return tx.walletTransaction.create({
+      data: {
+        walletId: wallet.id,
+        amount,
+        type: 'REWARD',
+        description: description || 'Reward issued by admin',
+      },
+    });
+  });
+};
+
+// --- Function for an admin to debit a wallet ---
+export const manuallyDebitWallet = async ({ userId, amount, description }) => {
+  // Uses the same logic as the user-facing debit function
+  return debitUserWallet(userId, amount, description || 'Manual debit by admin');
+};
+
 export const fetchAllReports = async () => {
   return prisma.userReport.findMany({
     orderBy: {
