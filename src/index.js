@@ -17,6 +17,7 @@ import reportRoutes from './routes/report.routes.js';
 import userRoutes from './routes/user.routes.js';
 import uploadRoutes from './routes/upload.routes.js';
 import bannerRoutes from './routes/banner.routes.js';
+import chatRoutes from './routes/chat.routes.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 
 dotenv.config();
@@ -41,6 +42,7 @@ app.use('/api/v1/reports', reportRoutes);
 app.use('/api/v1/user', userRoutes);
 app.use('/api/v1/uploads', uploadRoutes);
 app.use('/api/v1/banners', bannerRoutes);
+app.use('/api/v1/chats', chatRoutes);
 
 app.use(errorHandler);
 

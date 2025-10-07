@@ -171,13 +171,20 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum ChatType {
+  ONE_ON_ONE
+  GROUP
+}
+
 model Chat {
-  id        String   @id @default(uuid())
-  meetupId  String
-  meetup    Meetup   @relation(fields: [meetupId], references: [id])
-  users     User[]   @relation("ChatUsers")
+  id        String    @id @default(uuid())
+  name      String?   // For group chat names, e.g., "Weekend Trip Group"
+  meetupId  String    @unique // A meetup should only have one chat
+  meetup    Meetup    @relation(fields: [meetupId], references: [id])
+  type      ChatType
+  users     User[]    @relation("ChatUsers")
   messages  Message[]
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 }
 
 model Message {

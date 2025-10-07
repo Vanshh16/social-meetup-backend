@@ -40,7 +40,10 @@ const initializeSocket = (httpServer) => {
     socket.join(socket.user.id);
 
     // Event for a user to join a specific chat room
-    socket.on('joinChat', async (chatId) => {
+    socket.on('joinChat', async (message) => {
+      const { chatId } = JSON.parse(message);
+      console.log("chatIdXXXXX: ", message);
+      
       const isMember = await prisma.chat.findFirst({
         where: {
           id: chatId,
@@ -59,7 +62,9 @@ const initializeSocket = (httpServer) => {
     });
 
     // Event for sending a message
-    socket.on('sendMessage', async ({ chatId, content }) => {
+    socket.on('sendMessage', async (message) => {
+      const { chatId, content } = JSON.parse(message);
+      console.log("chatId, content", chatId, content);
       try {
         const senderId = socket.user.id;
         const newMessage = await saveMessage(chatId, senderId, content);

@@ -75,7 +75,10 @@ export const getMeetupRequests = async (meetupId, userId) => {
 export const respondToRequest = async (requestId, userId, action) => {
   const request = await prisma.joinRequest.findUnique({
     where: { id: requestId },
-    include: { meetup: true },
+    include: {
+      meetup: true,
+      sender: { select: { id: true, name: true } },
+    },
   });
   if (!request) throw new AppError("Request not found", 404);
 
@@ -93,6 +96,11 @@ export const respondToRequest = async (requestId, userId, action) => {
     data: { status },
   });
 
+  if (status === "ACCEPTED") {
+    // --- TRIGGER CHAT CREATION ---
+    await createChatForMeetup(request.meetupId, request.meetup.createdBy, request.senderId);
+  }
+  
   // --- EMIT NOTIFICATION TO THE REQUEST SENDER ---
   if (io) {
     const eventName = "join_request_update";
