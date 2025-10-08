@@ -2,6 +2,7 @@ import prisma from "../config/db.js";
 import { io } from "../socket/socketHandler.js";
 import AppError from "../utils/appError.js";
 import { calculateAge } from "../utils/helper.js";
+import { createChatForMeetup } from "./chat.service.js";
 
 export const createJoinRequest = async (meetupId, senderId) => {
   const meetup = await prisma.meetup.findUnique({ where: { id: meetupId } });
