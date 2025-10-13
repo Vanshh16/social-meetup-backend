@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "pm2 start ecosystem.config.js --env production",
+    "start": "pm2 start ecosystem.config.js --env production --no-daemon",
     "dev": "pm2 start ecosystem.config.js",
     "stop": "pm2 stop all",
     "delete": "pm2 delete all",
@@ -37,6 +37,7 @@
     "multer": "^2.0.2",
     "multer-storage-cloudinary": "^4.0.0",
     "nodemon": "^3.1.10",
+    "pm2": "^6.0.13",
     "razorpay": "^2.9.6",
     "socket.io": "^4.8.1",
     "twilio": "^5.7.1"
