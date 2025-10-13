@@ -1,5 +1,7 @@
-import express from 'express';
 import dotenv from 'dotenv';
+dotenv.config();
+
+import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import http from 'http';
@@ -21,7 +23,6 @@ import bannerRoutes from './routes/banner.routes.js';
 import chatRoutes from './routes/chat.routes.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 
-dotenv.config();
 
 const app = express();
 const httpServer = http.createServer(app);
