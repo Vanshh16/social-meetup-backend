@@ -12,6 +12,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
 enum Role {
@@ -65,6 +66,8 @@ model User {
 
   blocked         UserBlock[]  @relation("BlockedBy")
   blockedBy       UserBlock[]  @relation("BlockedUsers")
+
+  @@index([referredById])
 }
 
 enum AuthMethod {
@@ -120,6 +123,9 @@ model Meetup {
   JoinRequest JoinRequest[]
 
   Chat Chat[]
+
+  @@index([createdBy])
+  @@index([category])
 }
 
 model JoinRequest {
@@ -136,6 +142,9 @@ model JoinRequest {
   updatedAt  DateTime @updatedAt
 
   Payment    Payment?
+
+  @@index([meetupId])
+  @@index([senderId])
 }
 
 enum RequestStatus {

@@ -27,7 +27,6 @@ export const saveMessage = async (chatId, senderId, content) => {
           select: {
             id: true,
             name: true,
-            profilePhoto: true,
           }
         }
       }
