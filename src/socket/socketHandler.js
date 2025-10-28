@@ -159,38 +159,21 @@ const initializeSocket = (httpServer) => {
 
   // --- Connection handler (no changes here) ---
   io.on("connection", (socket) => {
-    console.log(`🔌 User connected: ${socket.id} | User ID: ${socket.user.id}`);
+
+    const userId = socket.user.id;
+    console.log(`🔌 User connected: ${socket.id} | User ID: ${userId}`);
 
     // Have each user join a private room named after their own user ID
-    socket.join(socket.user.id);
+    // User joins their own private room for direct notifications
+    socket.join(userId);
+
+    // --- Event Handlers ---
 
     // Event for a user to join a specific chat room
     socket.on("joinChat", async (message) => {
       const { chatId } = JSON.parse(message);
-      console.log("chatIdXXXXX: ", message);
-
-      const userId = socket.user.id;
       const cacheKey = `user:${userId}:chat:${chatId}:member`; // Unique key for this check
       const activeChatKey = `${ACTIVE_CHAT_KEY_PREFIX}${userId}`;
-      // const isMember = await prisma.chat.findFirst({
-      //   where: {
-      //     id: chatId,
-      //     users: { some: { id: socket.user.id } },
-      //   },
-      // });
-
-      // if (isMember) {
-      //   socket.join(chatId);
-      //   console.log(`User ${socket.user.id} joined chat room: ${chatId}`);
-      // } else {
-      //   console.log(
-      //     `Unauthorized attempt by user ${socket.user.id} to join chat ${chatId}`
-      //   );
-      //   // --- ENHANCEMENT 3: Emit Error to Client ---
-      //   socket.emit("error", {
-      //     message: `You are not authorized to join chat ${chatId}`,
-      //   });
-      // }
 
       try {
         // 1. Check the cache first
