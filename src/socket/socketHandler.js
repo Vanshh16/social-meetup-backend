@@ -325,18 +325,38 @@ const initializeSocket = (httpServer) => {
     // Typing Indicators
     socket.on("typing", (message) => {
       try {
-        const { chatId } = JSON.parse(message);
+        let chatId;
+        // Check if the message is a string (needs parsing) or an object
+        if (typeof message === 'string') {
+          ({ chatId } = JSON.parse(message));
+        } else if (typeof message === 'object' && message !== null) {
+          ({ chatId } = message); // Use the object directly
+        } else {
+          console.error('Received invalid typing payload:', message);
+          return; // Ignore invalid data
+        }
+
         if (!chatId) return;
         socket.volatile.to(chatId).emit("typing", { userId });
-      } catch(e) { console.error('Error parsing typing:', e); }
+      } catch(e) { console.error('Error handling typing event:', e, 'Payload:', message); }
     });
 
     socket.on("stop_typing", (message) => {
-      try {
-        const { chatId } = JSON.parse(message);
+       try {
+        let chatId;
+        // Check if the message is a string (needs parsing) or an object
+        if (typeof message === 'string') {
+          ({ chatId } = JSON.parse(message));
+        } else if (typeof message === 'object' && message !== null) {
+          ({ chatId } = message); // Use the object directly
+        } else {
+          console.error('Received invalid stop_typing payload:', message);
+          return; // Ignore invalid data
+        }
+
         if (!chatId) return;
         socket.volatile.to(chatId).emit("stop_typing", { userId });
-      } catch(e) { console.error('Error parsing stop_typing:', e); }
+      } catch(e) { console.error('Error handling stop_typing event:', e, 'Payload:', message); }
     });
 
     socket.on("disconnect", async () => {
