@@ -100,9 +100,14 @@ import redisClient from "../config/redis.js"; // Import our new Redis client
 import jwt from "jsonwebtoken";
 import prisma from "../config/db.js";
 import { saveMessage } from "../services/chat.service.js";
+import { notificationQueue } from "../queues/notificationQueue.js";
 import { messageQueue } from "../queues/messageQueue.js";
+import AppError from "../utils/appError.js";
 
 export let io;
+
+// Key prefix for Redis to store active chat status
+const ACTIVE_CHAT_KEY_PREFIX = "activeChat:";
 
 const initializeSocket = (httpServer) => {
   io = new Server(httpServer, {
@@ -140,12 +145,12 @@ const initializeSocket = (httpServer) => {
     }
 
     if (!token) {
-      return next(new Error("Authentication error: Token not provided."));
+      return next(new AppError("Authentication error: Token not provided.", 401));
     }
 
     jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
       if (err) {
-        return next(new Error("Authentication error: Invalid token."));
+        return next(new AppError("Authentication error: Invalid token.", 401));
       }
       socket.user = user;
       next();
@@ -166,7 +171,7 @@ const initializeSocket = (httpServer) => {
 
       const userId = socket.user.id;
       const cacheKey = `user:${userId}:chat:${chatId}:member`; // Unique key for this check
-
+      const activeChatKey = `${ACTIVE_CHAT_KEY_PREFIX}${userId}`;
       // const isMember = await prisma.chat.findFirst({
       //   where: {
       //     id: chatId,
@@ -217,14 +222,37 @@ const initializeSocket = (httpServer) => {
 
         if (isMember) {
           socket.join(chatId);
-          console.log(`User ${userId} joined chat room ${chatId} (from DB).`);
+
+          // Store active chat in Redis (expire after ~1 hour, refresh on activity)
+          await redisClient.setex(activeChatKey, 3600, chatId);
+          console.log(`User ${userId} joined chat room ${chatId}. Marked active.`);
         } else {
           console.log(`Unauthorized DB attempt by user ${userId} to join chat ${chatId}`);
           socket.emit('error', { message: `You are not authorized to join chat ${chatId}` });
         }
       } catch (error) {
-        console.error(`Error in joinChat handler for chat ${chatId}:`, error);
+        console.error(`Error in joinChat handler for user ${userId}, chat ${chatId}:`, error);
         socket.emit('error', { message: 'Server error while joining chat.' });
+      }
+    });
+
+    // --- NEW: Event for when user leaves a chat screen ---
+    socket.on("leaveChat", async (message) => {
+      try {
+        const { chatId } = JSON.parse(message);
+        if (!chatId) return;
+
+        const activeChatKey = `${ACTIVE_CHAT_KEY_PREFIX}${userId}`;
+        const currentActiveChat = await redisClient.get(activeChatKey);
+
+        // Only remove if they are leaving the chat they were marked active in
+        if (currentActiveChat === chatId) {
+            await redisClient.del(activeChatKey);
+            console.log(`User ${userId} left chat room ${chatId}. Marked inactive.`);
+        }
+        // No need for socket.leave(chatId) unless explicitly managing room membership counts
+      } catch (error) {
+         console.error(`Error in leaveChat handler for user ${userId}:`, error);
       }
     });
 
@@ -239,7 +267,7 @@ const initializeSocket = (httpServer) => {
         // 1. Optimistically create the message object for immediate broadcast.
         // This makes the UI feel instant.
         const optimisticMessage = {
-          id: `temp-${Date.now()}`, // A temporary ID for the frontend
+          id: `temp-${Date.now()}-${senderId.substring(0, 4)}`, // A temporary ID for the frontend
           content,
           createdAt: new Date().toISOString(),
           chatId,
@@ -255,12 +283,14 @@ const initializeSocket = (httpServer) => {
         // // Broadcast the new message to everyone in the specific chat room
         // io.to(chatId).emit('receiveMessage', newMessage);
 
-        // 3. Add the actual database save operation to the background queue.
-        await messageQueue.add("save-message", {
-          chatId,
-          senderId,
-          content,
-        });
+      
+        // Enqueue background jobs
+        await Promise.all([
+            messageQueue.add("save-message", { chatId, senderId, content }),
+            notificationQueue.add("send-chat-notification", { chatId, senderId, messageContent: content }),
+            // Refresh active status TTL
+            redisClient.expire(`${ACTIVE_CHAT_KEY_PREFIX}${userId}`, 3600)
+        ]);
       } catch (error) {
         console.error(error);
         socket.emit("error", { message: "Failed to send message." });
@@ -268,18 +298,26 @@ const initializeSocket = (httpServer) => {
     });
 
     // Typing Indicators
-    socket.on("typing", ({ chatId }) => {
+    socket.on("typing", (message) => {
+      const { chatId } = JSON.parse(message);
       // Broadcast to everyone in the chat room EXCEPT the sender
       socket.volatile.to(chatId).emit("typing", { userId: socket.user.id });
     });
 
-    socket.on("stop_typing", ({ chatId }) => {
+    socket.on("stop_typing", (message) => {
+      const { chatId } = JSON.parse(message);
       socket.volatile
         .to(chatId)
         .emit("stop_typing", { userId: socket.user.id });
     });
-    socket.on("disconnect", () => {
-      console.log(`User disconnected: ${socket.id}`);
+    socket.on("disconnect", async () => {
+      try {
+        // Remove active chat status from Redis on disconnect
+        await redisClient.del(`${ACTIVE_CHAT_KEY_PREFIX}${userId}`);
+        console.log(`User disconnected: ${socket.id}. Cleared active chat status.`);
+      } catch(error) {
+         console.error(`Error clearing active status for ${userId} on disconnect:`, error);
+      }
     });
   });
 };

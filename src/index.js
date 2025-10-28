@@ -8,6 +8,7 @@ import http from 'http';
 import { Server } from 'socket.io';
 import initializeSocket from './socket/socketHandler.js'
 import './queues/messageQueue.js'; 
+import './queues/notificationQueue.js';
 
 import authRoutes from './routes/auth.routes.js';
 import meetupRoutes from './routes/meetup.routes.js';
