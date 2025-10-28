@@ -126,10 +126,10 @@ const initializeSocket = (httpServer) => {
 
   // --- NEW: Set up Redis Adapter ---
   // Create a duplicate of the client for pub/sub
+  const pubClient = redisClient.duplicate();
   const subClient = redisClient.duplicate();
-
   // Replace the default in-memory adapter with the Redis adapter
-  io.adapter(createAdapter(redisClient, subClient));
+  io.adapter(createAdapter(pubClient, subClient));
   console.log("Socket.io is now using the Redis adapter.");
 
   // --- Middleware for authentication (no changes here) ---
@@ -171,52 +171,102 @@ const initializeSocket = (httpServer) => {
 
     // Event for a user to join a specific chat room
     socket.on("joinChat", async (message) => {
-      const { chatId } = JSON.parse(message);
-      const cacheKey = `user:${userId}:chat:${chatId}:member`; // Unique key for this check
-      const activeChatKey = `${ACTIVE_CHAT_KEY_PREFIX}${userId}`;
 
+      let chatId;
       try {
-        // 1. Check the cache first
-        const cachedResult = await redisClient.get(cacheKey);
+        ({ chatId } = JSON.parse(message));
+        if (!chatId) throw new Error("chatId is required.");
 
-        if (cachedResult) {
-          // --- Cache Hit ---
-          if (cachedResult === 'true') {
-            socket.join(chatId);
-            console.log(`User ${userId} joined chat room ${chatId} (from cache).`);
-          } else {
-            socket.emit('error', { message: `Not authorized for chat ${chatId} (from cache).` });
-          }
-          return; // Stop execution
+        const cacheKey = `user:${userId}:chat:${chatId}:member`;
+        const activeChatKey = `${ACTIVE_CHAT_KEY_PREFIX}${userId}`;
+
+        // Check cache for membership
+        const cachedResult = await redisClient.get(cacheKey);
+        let isMember = cachedResult === 'true';
+
+        if (cachedResult === null) {
+          // Cache miss: Check database
+          const dbMember = await prisma.chat.findFirst({
+            where: { id: chatId, users: { some: { id: userId } } },
+            select: { id: true }, // Select minimal data
+          });
+          isMember = !!dbMember;
+          // Update cache (expire after 5 mins)
+          await redisClient.setex(cacheKey, 300, isMember ? 'true' : 'false');
+          console.log(`User ${userId} membership for chat ${chatId} checked via DB.`);
+        } else {
+          console.log(`User ${userId} membership for chat ${chatId} checked via cache.`);
         }
 
-        // --- Cache Miss ---
-        // 2. If not in cache, query the database
-        const isMember = await prisma.chat.findFirst({
-          where: {
-            id: chatId,
-            users: { some: { id: userId } }
-          }
-        });
-
-        // 3. Update the cache with the result
-        // Set expiration to 5 minutes (300 seconds)
-        await redisClient.setex(cacheKey, 300, isMember ? 'true' : 'false');
 
         if (isMember) {
           socket.join(chatId);
-
           // Store active chat in Redis (expire after ~1 hour, refresh on activity)
           await redisClient.setex(activeChatKey, 3600, chatId);
           console.log(`User ${userId} joined chat room ${chatId}. Marked active.`);
         } else {
-          console.log(`Unauthorized DB attempt by user ${userId} to join chat ${chatId}`);
-          socket.emit('error', { message: `You are not authorized to join chat ${chatId}` });
+          socket.emit("error", { message: `You are not authorized to join chat ${chatId}` });
         }
       } catch (error) {
         console.error(`Error in joinChat handler for user ${userId}, chat ${chatId}:`, error);
-        socket.emit('error', { message: 'Server error while joining chat.' });
+        socket.emit("error", { message: 'Server error while joining chat.' });
       }
+
+
+
+
+
+
+
+
+
+
+      // const { chatId } = JSON.parse(message);
+      // const cacheKey = `user:${userId}:chat:${chatId}:member`; // Unique key for this check
+      // const activeChatKey = `${ACTIVE_CHAT_KEY_PREFIX}${userId}`;
+
+      // try {
+      //   // 1. Check the cache first
+      //   const cachedResult = await redisClient.get(cacheKey);
+
+      //   if (cachedResult) {
+      //     // --- Cache Hit ---
+      //     if (cachedResult === 'true') {
+      //       socket.join(chatId);
+      //       console.log(`User ${userId} joined chat room ${chatId} (from cache).`);
+      //     } else {
+      //       socket.emit('error', { message: `Not authorized for chat ${chatId} (from cache).` });
+      //     }
+      //     return; // Stop execution
+      //   }
+
+      //   // --- Cache Miss ---
+      //   // 2. If not in cache, query the database
+      //   const isMember = await prisma.chat.findFirst({
+      //     where: {
+      //       id: chatId,
+      //       users: { some: { id: userId } }
+      //     }
+      //   });
+
+      //   // 3. Update the cache with the result
+      //   // Set expiration to 5 minutes (300 seconds)
+      //   await redisClient.setex(cacheKey, 300, isMember ? 'true' : 'false');
+
+      //   if (isMember) {
+      //     socket.join(chatId);
+
+      //     // Store active chat in Redis (expire after ~1 hour, refresh on activity)
+      //     await redisClient.setex(activeChatKey, 3600, chatId);
+      //     console.log(`User ${userId} joined chat room ${chatId}. Marked active.`);
+      //   } else {
+      //     console.log(`Unauthorized DB attempt by user ${userId} to join chat ${chatId}`);
+      //     socket.emit('error', { message: `You are not authorized to join chat ${chatId}` });
+      //   }
+      // } catch (error) {
+      //   console.error(`Error in joinChat handler for user ${userId}, chat ${chatId}:`, error);
+      //   socket.emit('error', { message: 'Server error while joining chat.' });
+      // }
     });
 
     // --- NEW: Event for when user leaves a chat screen ---
@@ -241,32 +291,23 @@ const initializeSocket = (httpServer) => {
 
     // Event for sending a message
     socket.on("sendMessage", async (message) => {
-      const { chatId, content } = JSON.parse(message);
-      console.log("chatId, content", chatId, content);
+      let chatId, content;
       try {
-        const senderId = socket.user.id;
-        // const newMessage = await saveMessage(chatId, senderId, content);
+        ({ chatId, content } = JSON.parse(message));
+        if (!chatId || !content) throw new Error("chatId and content required.");
 
-        // 1. Optimistically create the message object for immediate broadcast.
-        // This makes the UI feel instant.
+        const senderId = socket.user.id;
         const optimisticMessage = {
-          id: `temp-${Date.now()}-${senderId.substring(0, 4)}`, // A temporary ID for the frontend
+          id: `temp-${Date.now()}-${senderId.substring(0, 4)}`, // More unique temp ID
           content,
           createdAt: new Date().toISOString(),
           chatId,
-          sender: {
-            id: senderId,
-            name: socket.user.name, // Assuming name is in JWT payload
-          },
+          sender: { id: senderId, name: socket.user.name || "User" }, // Use name from token if available
         };
 
-        // 2. Broadcast the message immediately to all clients in the room.
+        // Emit message instantly
         io.to(chatId).emit("receiveMessage", optimisticMessage);
 
-        // // Broadcast the new message to everyone in the specific chat room
-        // io.to(chatId).emit('receiveMessage', newMessage);
-
-      
         // Enqueue background jobs
         await Promise.all([
             messageQueue.add("save-message", { chatId, senderId, content }),
@@ -274,25 +315,30 @@ const initializeSocket = (httpServer) => {
             // Refresh active status TTL
             redisClient.expire(`${ACTIVE_CHAT_KEY_PREFIX}${userId}`, 3600)
         ]);
+
       } catch (error) {
-        console.error(error);
+        console.error(`Error in sendMessage handler for user ${userId}, chat ${chatId}:`, error);
         socket.emit("error", { message: "Failed to send message." });
       }
     });
 
     // Typing Indicators
     socket.on("typing", (message) => {
-      const { chatId } = JSON.parse(message);
-      // Broadcast to everyone in the chat room EXCEPT the sender
-      socket.volatile.to(chatId).emit("typing", { userId: socket.user.id });
+      try {
+        const { chatId } = JSON.parse(message);
+        if (!chatId) return;
+        socket.volatile.to(chatId).emit("typing", { userId });
+      } catch(e) { console.error('Error parsing typing:', e); }
     });
 
     socket.on("stop_typing", (message) => {
-      const { chatId } = JSON.parse(message);
-      socket.volatile
-        .to(chatId)
-        .emit("stop_typing", { userId: socket.user.id });
+      try {
+        const { chatId } = JSON.parse(message);
+        if (!chatId) return;
+        socket.volatile.to(chatId).emit("stop_typing", { userId });
+      } catch(e) { console.error('Error parsing stop_typing:', e); }
     });
+
     socket.on("disconnect", async () => {
       try {
         // Remove active chat status from Redis on disconnect
