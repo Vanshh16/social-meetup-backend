@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../middlewares/auth.middleware.js';
-import { profileUpload } from '../config/cloudinary.js';
+import { chatUpload, profileUpload, voiceUpload } from '../config/cloudinary.js';
 import { uploadChatImageController, uploadChatVoiceController, uploadProfilePhoto, uploadUserPictures } from '../controllers/upload.controller.js';
 
 const router = Router();
