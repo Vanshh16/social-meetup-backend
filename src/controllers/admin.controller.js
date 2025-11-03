@@ -28,9 +28,32 @@ import {
   getRewardStats,
   getReferralStats,
   getReferralHistory,
+  loginAdminWithPassword,
 } from "../services/admin.service.js";
 import { updateMeetup } from '../services/meetup.service.js'; // Reusing user-facing service
 import AppError from "../utils/appError.js";
+import { generateToken } from "../utils/jwt.js";
+
+/**
+ * Handles admin login request.
+ */
+export const adminLoginController = async (req, res, next) => {
+  try {
+    const { mobileNumber, password } = req.body;
+    const adminUser = await loginAdminWithPassword(mobileNumber, password);
+
+    // Generate a token for the admin
+    const token = generateToken({
+      id: adminUser.id,
+      role: adminUser.role,
+      name: adminUser.name,
+    });
+
+    res.status(200).json({ success: true, data: { user: adminUser, token } });
+  } catch (error) {
+    next(error);
+  }
+};
 
 export const getAllUsers = async (req, res, next) => {
   try {

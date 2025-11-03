@@ -2,6 +2,40 @@ import { Parser } from "json2csv";
 import prisma from "../config/db.js";
 import { messaging } from "../config/firebase.js";
 import AppError from "../utils/appError.js";
+import { comparePasswords } from "../utils/password.js";
+
+/**
+ * Authenticates an admin using mobile number and password.
+ * @param {string} mobileNumber - The admin's mobile number.
+ * @param {string} password - The admin's plain text password.
+ * @returns {Promise<object>} The admin user object (without password).
+ */
+export const loginAdminWithPassword = async (mobileNumber, password) => {
+  // 1. Find the user by mobile number
+  const user = await prisma.user.findUnique({
+    where: { mobileNumber },
+  });
+
+  // 2. Check if user exists and is an admin
+  if (!user || user.role !== 'ADMIN') {
+    throw new AppError('Invalid credentials or not an admin', 401);
+  }
+
+  // 3. Check if password is set
+  if (!user.password) {
+      throw new AppError('Admin account not set up for password login.', 400);
+  }
+
+  // 4. Compare passwords
+  const isMatch = await comparePasswords(password, user.password);
+  if (!isMatch) {
+    throw new AppError('Invalid credentials or not an admin', 401);
+  }
+
+  // 5. Return user data (excluding password)
+  const { password: _, ...adminUser } = user;
+  return adminUser;
+};
 
 /**
  * Fetches all users from the database, excluding their passwords.

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { requireAuth } from '../middlewares/auth.middleware.js';
 import { profileUpload } from '../config/cloudinary.js';
-import { uploadProfilePhoto, uploadUserPictures } from '../controllers/upload.controller.js';
+import { uploadChatImageController, uploadChatVoiceController, uploadProfilePhoto, uploadUserPictures } from '../controllers/upload.controller.js';
 
 const router = Router();
 
@@ -21,6 +21,22 @@ router.post(
   requireAuth,
   profileUpload.array('pictures', 4), // 'pictures' is the field name, 4 is the max count
   uploadUserPictures
+);
+
+// --- Route for uploading a chat image ---
+router.post(
+  '/chat-image', 
+  requireAuth, 
+  chatUpload.single('image'), // Expect a field named 'image'
+  uploadChatImageController
+);
+
+// --- Route for uploading a chat voice note ---
+router.post(
+  '/chat-voice', 
+  requireAuth, 
+  voiceUpload.single('voiceNote'), // Expect a field named 'voiceNote'
+  uploadChatVoiceController
 );
 
 export default router;

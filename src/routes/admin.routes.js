@@ -31,10 +31,17 @@ import {
   getRewardHistoryController,
   getReferralStatsController,
   getReferralHistoryController,
+  adminLoginController,
 } from '../controllers/admin.controller.js';
 
 const router = Router();
 
+// --- Public Admin Route ---
+// Admin Login (does not require auth)
+router.post('/login', adminLoginController);
+
+// --- Protected Admin Routes ---
+// All routes below this line will require an authenticated admin token
 // Middleware to ensure all routes in this file are accessed only by admins
 router.use(requireAuth, requireRole(['ADMIN']));
 

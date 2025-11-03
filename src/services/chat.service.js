@@ -9,7 +9,7 @@ import AppError from "../utils/appError.js";
  * @param {string} content - The message content.
  * @returns {Promise<object>} The newly created message object with sender details.
  */
-export const saveMessage = async (chatId, senderId, content) => {
+export const saveMessage = async (chatId, senderId, content, type = "TEXT") => {
 
   if (!chatId || !senderId || !content) {
     throw new AppError("chatId, senderId, and content are required.", 400);
@@ -20,9 +20,15 @@ export const saveMessage = async (chatId, senderId, content) => {
       data: {
         chatId,
         senderId,
-        content,
+        content, // This will be the text OR the image URL
+        type,    // Save the type (TEXT or IMAGE)
       },
       include: {
+        id: true,
+        content: true,
+        createdAt: true,
+        chatId: true,
+        type: true,
         sender: {
           select: {
             id: true,
@@ -48,7 +54,7 @@ export const saveMessage = async (chatId, senderId, content) => {
 export const createChatForMeetup = async (meetupId, creatorId, joinerId) => {
     const meetup = await prisma.meetup.findUnique({
         where: { id: meetupId },
-        select: { groupSize: true, locationName: true }
+        select: { groupSize: true, locationName: true, category: true }
     });
 
     const isGroupChat = meetup.groupSize > 1;
@@ -72,7 +78,7 @@ export const createChatForMeetup = async (meetupId, creatorId, joinerId) => {
             data: {
                 meetupId: meetupId,
                 type: isGroupChat ? 'GROUP' : 'ONE_ON_ONE',
-                name: isGroupChat ? `Group for: ${meetup.locationName}` : null,
+                name: isGroupChat ? `Group for: ${meetup.category} (${meetup.locationName})` : null,
                 users: {
                     connect: [{ id: creatorId }, { id: joinerId }]
                 }

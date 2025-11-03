@@ -52,12 +52,12 @@ export const fetchWalletTransactions = async (userId) => {
  * @param {number} amount - The amount to debit.
  * @param {string} description - The reason for the debit.
  */
-export const debitUserWallet = async (userId, amount, description) => {
+export const debitUserWallet = async (userId, amount, description, prismaClient = prisma) => {
   if (amount <= 0) {
     throw new AppError('Debit amount must be positive.', 400);
   }
 
-  return prisma.$transaction(async (tx) => {
+  return prismaClient.$transaction(async (tx) => {
     const wallet = await tx.userWallet.findUnique({
       where: { userId },
     });
@@ -81,6 +81,49 @@ export const debitUserWallet = async (userId, amount, description) => {
         walletId: wallet.id,
         amount,
         type: 'DEBIT',
+        description,
+      },
+    });
+
+    return transaction;
+  });
+};
+
+/**
+ * Creates a CREDIT transaction for a user.
+ * @param {string} userId - The ID of the user to credit.
+ * @param {number} amount - The amount to credit.
+ * @param {string} description - The reason for the credit.
+ * @param {object} [prismaClient=prisma] - Optional Prisma client for transactions.
+ */
+export const creditUserWallet = async (userId, amount, description, prismaClient = prisma) => {
+  if (amount <= 0) {
+    throw new AppError('Credit amount must be positive.', 400);
+  }
+
+  // Use the provided prismaClient (which could be the main client or a transaction client)
+  return prismaClient.$transaction(async (tx) => {
+    // 1. Find the user's wallet
+    const wallet = await tx.userWallet.findUnique({
+      where: { userId },
+    });
+
+    if (!wallet) {
+      throw new AppError('User wallet not found.', 404);
+    }
+
+    // 2. Increase the wallet balance
+    await tx.userWallet.update({
+      where: { id: wallet.id },
+      data: { balance: { increment: amount } },
+    });
+
+    // 3. Record the transaction
+    const transaction = await tx.walletTransaction.create({
+      data: {
+        walletId: wallet.id,
+        amount,
+        type: 'CREDIT', // Set the type to CREDIT
         description,
       },
     });

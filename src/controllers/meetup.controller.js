@@ -4,7 +4,8 @@ import {
   fetchMeetupDetails,
   fetchMeetupHistory,
   updateMeetup,
-  deleteMeetup
+  deleteMeetup,
+  getJoinedMeetups
 } from "../services/meetup.service.js";
 
 export const createMeetupController = async (req, res, next) => {
@@ -29,6 +30,15 @@ export const getMyMeetupsController = async (req, res) => {
     console.error(err);
     // res.status(500).json({ success: false, error: 'Failed to fetch meetups' });
     next(err);
+  }
+};
+
+export const getJoinedMeetupsController = async (req, res, next) => {
+  try {
+    const meetups = await getJoinedMeetups(req.user.id);
+    res.status(200).json({ success: true, data: meetups });
+  } catch (error) {
+    next(error);
   }
 };
 

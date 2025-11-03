@@ -26,3 +26,29 @@ export const uploadUserPictures = async (req, res, next) => {
     next(error);
   }
 };
+
+// --- Controller for chat image uploads ---
+export const uploadChatImageController = (req, res, next) => {
+  try {
+    if (!req.file) {
+      throw new Error('No file uploaded.');
+    }
+    // Just return the URL from Cloudinary
+    res.status(200).json({ success: true, url: req.file.path });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// --- Controller for chat voice uploads ---
+export const uploadChatVoiceController = (req, res, next) => {
+  try {
+    if (!req.file) {
+      throw new Error('No voice note file uploaded.');
+    }
+    // Just return the URL from Cloudinary
+    res.status(200).json({ success: true, url: req.file.path });
+  } catch (error) {
+    next(error);
+  }
+};

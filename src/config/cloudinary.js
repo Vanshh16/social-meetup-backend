@@ -46,3 +46,26 @@ const bannerStorage = new CloudinaryStorage({
   },
 });
 export const bannerUpload = multer({ storage: bannerStorage });
+
+// --- Storage for Chat Images ---
+const chatStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'chat-images', // Store in a separate 'chat-images' folder
+    allowed_formats: ['jpg', 'jpeg', 'png', 'gif'],
+    public_id: (req, file) => `chat-${req.user.id}-${Date.now()}`,
+  },
+});
+export const chatUpload = multer({ storage: chatStorage });
+
+// --- Storage for Chat Voice Notes ---
+const voiceStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'chat-voice-notes',
+    resource_type: 'video', // Cloudinary handles audio as 'video' or 'raw'
+    allowed_formats: ['mp3', 'm4a', 'wav', 'ogg'],
+    public_id: (req, file) => `voice-${req.user.id}-${Date.now()}`,
+  },
+});
+export const voiceUpload = multer({ storage: voiceStorage });

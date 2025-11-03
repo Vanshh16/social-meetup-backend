@@ -11,10 +11,10 @@ export const messageQueue = new Queue(QUEUE_NAME, {
 
 // The "Worker" is what processes the jobs.
 new Worker(QUEUE_NAME, async (job) => {
-  const { chatId, senderId, content } = job.data;
+  const { chatId, senderId, content, type } = job.data;
   try {
     console.log(`✍️  Worker processing job: Saving message to chat ${chatId}`);
-    await saveMessage(chatId, senderId, content);
+    await saveMessage(chatId, senderId, content, type);
   } catch (error) {
     console.error(`Error processing message job for chat ${chatId}:`, error);
     // You can add more advanced retry logic here if needed

@@ -145,7 +145,9 @@ const initializeSocket = (httpServer) => {
     }
 
     if (!token) {
-      return next(new AppError("Authentication error: Token not provided.", 401));
+      return next(
+        new AppError("Authentication error: Token not provided.", 401)
+      );
     }
 
     jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
@@ -159,7 +161,6 @@ const initializeSocket = (httpServer) => {
 
   // --- Connection handler (no changes here) ---
   io.on("connection", (socket) => {
-
     const userId = socket.user.id;
     console.log(`🔌 User connected: ${socket.id} | User ID: ${userId}`);
 
@@ -171,7 +172,6 @@ const initializeSocket = (httpServer) => {
 
     // Event for a user to join a specific chat room
     socket.on("joinChat", async (message) => {
-
       let chatId;
       try {
         ({ chatId } = JSON.parse(message));
@@ -182,7 +182,7 @@ const initializeSocket = (httpServer) => {
 
         // Check cache for membership
         const cachedResult = await redisClient.get(cacheKey);
-        let isMember = cachedResult === 'true';
+        let isMember = cachedResult === "true";
 
         if (cachedResult === null) {
           // Cache miss: Check database
@@ -192,34 +192,35 @@ const initializeSocket = (httpServer) => {
           });
           isMember = !!dbMember;
           // Update cache (expire after 5 mins)
-          await redisClient.setex(cacheKey, 300, isMember ? 'true' : 'false');
-          console.log(`User ${userId} membership for chat ${chatId} checked via DB.`);
+          await redisClient.setex(cacheKey, 300, isMember ? "true" : "false");
+          console.log(
+            `User ${userId} membership for chat ${chatId} checked via DB.`
+          );
         } else {
-          console.log(`User ${userId} membership for chat ${chatId} checked via cache.`);
+          console.log(
+            `User ${userId} membership for chat ${chatId} checked via cache.`
+          );
         }
-
 
         if (isMember) {
           socket.join(chatId);
           // Store active chat in Redis (expire after ~1 hour, refresh on activity)
           await redisClient.setex(activeChatKey, 3600, chatId);
-          console.log(`User ${userId} joined chat room ${chatId}. Marked active.`);
+          console.log(
+            `User ${userId} joined chat room ${chatId}. Marked active.`
+          );
         } else {
-          socket.emit("error", { message: `You are not authorized to join chat ${chatId}` });
+          socket.emit("error", {
+            message: `You are not authorized to join chat ${chatId}`,
+          });
         }
       } catch (error) {
-        console.error(`Error in joinChat handler for user ${userId}, chat ${chatId}:`, error);
-        socket.emit("error", { message: 'Server error while joining chat.' });
+        console.error(
+          `Error in joinChat handler for user ${userId}, chat ${chatId}:`,
+          error
+        );
+        socket.emit("error", { message: "Server error while joining chat." });
       }
-
-
-
-
-
-
-
-
-
 
       // const { chatId } = JSON.parse(message);
       // const cacheKey = `user:${userId}:chat:${chatId}:member`; // Unique key for this check
@@ -280,21 +281,24 @@ const initializeSocket = (httpServer) => {
 
         // Only remove if they are leaving the chat they were marked active in
         if (currentActiveChat === chatId) {
-            await redisClient.del(activeChatKey);
-            console.log(`User ${userId} left chat room ${chatId}. Marked inactive.`);
+          await redisClient.del(activeChatKey);
+          console.log(
+            `User ${userId} left chat room ${chatId}. Marked inactive.`
+          );
         }
         // No need for socket.leave(chatId) unless explicitly managing room membership counts
       } catch (error) {
-         console.error(`Error in leaveChat handler for user ${userId}:`, error);
+        console.error(`Error in leaveChat handler for user ${userId}:`, error);
       }
     });
 
     // Event for sending a message
     socket.on("sendMessage", async (message) => {
-      let chatId, content;
+      let chatId, content, type;
       try {
-        ({ chatId, content } = JSON.parse(message));
-        if (!chatId || !content) throw new Error("chatId and content required.");
+        ({ chatId, content, type = "TEXT" } = JSON.parse(message));
+        if (!chatId || !content)
+          throw new Error("chatId and content required.");
 
         const senderId = socket.user.id;
         const optimisticMessage = {
@@ -302,6 +306,7 @@ const initializeSocket = (httpServer) => {
           content,
           createdAt: new Date().toISOString(),
           chatId,
+          type,
           sender: { id: senderId, name: socket.user.name || "User" }, // Use name from token if available
         };
 
@@ -309,15 +314,33 @@ const initializeSocket = (httpServer) => {
         io.to(chatId).emit("receiveMessage", optimisticMessage);
 
         // Enqueue background jobs
-        await Promise.all([
-            messageQueue.add("save-message", { chatId, senderId, content }),
-            notificationQueue.add("send-chat-notification", { chatId, senderId, messageContent: content }),
-            // Refresh active status TTL
-            redisClient.expire(`${ACTIVE_CHAT_KEY_PREFIX}${userId}`, 3600)
-        ]);
+        await messageQueue.add("save-message", { 
+          chatId, 
+          senderId, 
+          content, 
+          type 
+        });
+
+        let notificationContent = content;
+        if (type === 'IMAGE') {
+          notificationContent = 'Sent an image';
+        } else if (type === 'VOICE') {
+          notificationContent = 'Sent a voice note';
+        }
+        
+        await notificationQueue.add("send-chat-notification", { 
+          chatId, 
+          senderId, 
+          messageContent: notificationContent 
+        });
+        // Refresh active status TTL
+        await redisClient.expire(`${ACTIVE_CHAT_KEY_PREFIX}${userId}`, 3600);
 
       } catch (error) {
-        console.error(`Error in sendMessage handler for user ${userId}, chat ${chatId}:`, error);
+        console.error(
+          `Error in sendMessage handler for user ${userId}, chat ${chatId}:`,
+          error
+        );
         socket.emit("error", { message: "Failed to send message." });
       }
     });
@@ -327,45 +350,59 @@ const initializeSocket = (httpServer) => {
       try {
         let chatId;
         // Check if the message is a string (needs parsing) or an object
-        if (typeof message === 'string') {
+        if (typeof message === "string") {
           ({ chatId } = JSON.parse(message));
-        } else if (typeof message === 'object' && message !== null) {
+        } else if (typeof message === "object" && message !== null) {
           ({ chatId } = message); // Use the object directly
         } else {
-          console.error('Received invalid typing payload:', message);
+          console.error("Received invalid typing payload:", message);
           return; // Ignore invalid data
         }
 
         if (!chatId) return;
         socket.volatile.to(chatId).emit("typing", { userId });
-      } catch(e) { console.error('Error handling typing event:', e, 'Payload:', message); }
+      } catch (e) {
+        console.error("Error handling typing event:", e, "Payload:", message);
+      }
     });
 
     socket.on("stop_typing", (message) => {
-       try {
+      try {
         let chatId;
         // Check if the message is a string (needs parsing) or an object
-        if (typeof message === 'string') {
+        if (typeof message === "string") {
           ({ chatId } = JSON.parse(message));
-        } else if (typeof message === 'object' && message !== null) {
+        } else if (typeof message === "object" && message !== null) {
           ({ chatId } = message); // Use the object directly
         } else {
-          console.error('Received invalid stop_typing payload:', message);
+          console.error("Received invalid stop_typing payload:", message);
           return; // Ignore invalid data
         }
 
         if (!chatId) return;
         socket.volatile.to(chatId).emit("stop_typing", { userId });
-      } catch(e) { console.error('Error handling stop_typing event:', e, 'Payload:', message); }
+      } catch (e) {
+        console.error(
+          "Error handling stop_typing event:",
+          e,
+          "Payload:",
+          message
+        );
+      }
     });
 
     socket.on("disconnect", async () => {
       try {
         // Remove active chat status from Redis on disconnect
         await redisClient.del(`${ACTIVE_CHAT_KEY_PREFIX}${userId}`);
-        console.log(`User disconnected: ${socket.id}. Cleared active chat status.`);
-      } catch(error) {
-         console.error(`Error clearing active status for ${userId} on disconnect:`, error);
+        console.log(
+          `User disconnected: ${socket.id}. Cleared active chat status.`
+        );
+      } catch (error) {
+        console.error(
+          `Error clearing active status for ${userId} on disconnect:`,
+          error
+        );
       }
     });
   });

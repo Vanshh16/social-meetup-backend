@@ -68,6 +68,7 @@ model User {
   blockedBy       UserBlock[]  @relation("BlockedUsers")
 
   @@index([referredById])
+  Payment Payment[]
 }
 
 enum AuthMethod {
@@ -157,6 +158,10 @@ enum RequestStatus {
 model Payment {
   id            String   @id @default(uuid())
   
+  // --- ADD THIS FIELD ---
+  userId          String?  // The user this payment belongs to
+  user            User?    @relation(fields: [userId], references: [id])
+  
   joinRequestId String?  @unique // Now optional 
   joinRequest   JoinRequest? @relation(fields: [joinRequestId], references: [id])
   
@@ -196,6 +201,12 @@ model Chat {
   createdAt DateTime  @default(now())
 }
 
+enum MessageType {
+  TEXT
+  IMAGE
+  VOICE
+}
+
 model Message {
   id        String   @id @default(uuid())
   chatId    String
@@ -203,6 +214,7 @@ model Message {
   senderId  String
   sender    User     @relation(fields: [senderId], references: [id])
   content   String
+  type      MessageType @default(TEXT)
   createdAt DateTime @default(now())
 }
 
@@ -212,6 +224,7 @@ model Category {
   id          String       @id @default(uuid())
   name        String       @unique
   subcategories SubCategory[]
+  price         Float       @default(0.0)
 }
 
 model SubCategory {

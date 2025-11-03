@@ -1,6 +1,7 @@
 // import { Cashfree } from 'cashfree-pg';
 import prisma from '../config/db.js';
 import AppError from '../utils/appError.js';
+import { debitUserWallet } from './wallet.service.js';
 
 /**
  * Create a new meetup
@@ -25,13 +26,47 @@ export const createMeetup = async (userId, data) => {
   });
 };
 
+// "Meetups I'm Hosting" API
 /**
  * Get all meetups created by a specific user
+ * @param {string} userId - The ID of the user.
  */
 export const getUserMeetups = async (userId) => {
   return prisma.meetup.findMany({
     where: { createdBy: userId },
     orderBy: { createdAt: "desc" },
+    include: {
+        _count: { // Include how many people have joined
+            select: { JoinRequest: { where: { status: 'ACCEPTED' } } }
+        }
+    }
+  });
+};
+
+// "Meetups I'm Attending" API
+/**
+ * Fetches all meetups a user has been accepted into.
+ * @param {string} userId - The ID of the user.
+ */
+export const getJoinedMeetups = async (userId) => {
+  return prisma.meetup.findMany({
+    where: {
+      // Find meetups that have at least one JoinRequest
+      JoinRequest: {
+        some: {
+          senderId: userId,
+          status: 'ACCEPTED'
+        }
+      }
+    },
+    orderBy: {
+      createdAt: 'desc'
+    },
+    include: {
+      user: { // Include the host's info
+        select: { id: true, name: true, profilePhoto: true }
+      }
+    }
   });
 };
 
@@ -54,6 +89,16 @@ export const verifyPaymentAndCreateMeetup = async (userId, meetupData, paymentDe
     // const isVerified = await verifyCashfreePayment(order_id);
     // if (!isVerified) throw new AppError("Payment verification failed.", 400);
 
+    const category = await prisma.category.findUnique({
+        where: { name: meetupData.category },
+        select: { price: true }
+    });
+
+    if (!category) {
+        throw new AppError("Selected category not found.", 404);
+    }
+    const meetupPrice = category.price;
+
     if (!meetupData.latitude || !meetupData.longitude) {
     throw new AppError("Latitude and longitude are required to create a meetup.", 400);
   }
@@ -63,6 +108,18 @@ export const verifyPaymentAndCreateMeetup = async (userId, meetupData, paymentDe
         //     where: { cashfreeOrderId: order_id },
         //     data: { status: 'SUCCESS' }
         // });
+
+        if (meetupPrice > 0) {
+            try {
+                await debitUserWallet(userId, meetupPrice, `Fee for creating meetup: ${meetupData.category}`, tx); // Pass 'tx'
+            } catch (error) {
+                // Re-throw specific errors like insufficient funds
+                if (error.message.includes('Insufficient wallet balance')) {
+                    throw new AppError(`Insufficient wallet balance to create meetup. Required: ${meetupPrice}`, 400);
+                }
+                throw error; // Re-throw other errors
+            }
+        }
 
         const meetup = await tx.meetup.create({
             data: {

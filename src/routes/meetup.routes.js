@@ -7,6 +7,7 @@ import {
   getMeetupHistoryController,
   editMeetupController,
   cancelMeetupController,
+  getJoinedMeetupsController,
 } from '../controllers/meetup.controller.js';
 
 const router = Router();
@@ -15,6 +16,7 @@ router.use(requireAuth); // Apply auth to all meetup routes
 
 router.post('/', createMeetupController);
 router.get('/my-meetups', getMyMeetupsController);
+router.get('/joined', getJoinedMeetupsController);
 router.get('/history', getMeetupHistoryController);
 
 // Routes for specific meetups by ID
