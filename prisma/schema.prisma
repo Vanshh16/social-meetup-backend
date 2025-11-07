@@ -69,6 +69,7 @@ model User {
 
   @@index([referredById])
   Payment Payment[]
+  Notification Notification[]
 }
 
 enum AuthMethod {
@@ -309,4 +310,34 @@ model Banner {
   isActive  Boolean  @default(true) // To easily enable/disable banners
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+enum NotificationType {
+  vibeMatch
+  eventNearby
+  profileLike
+  joinRequest
+  message
+  other
+}
+
+model Notification {
+  id           String           @id @default(uuid())
+  userId       String           // The ID of the user who will receive this
+  user         User             @relation(fields: [userId], references: [id])
+  type         NotificationType
+  title        String
+  subtitle     String           @db.Text // Use @db.Text for longer descriptions
+  isRead       Boolean          @default(false)
+  
+  // Optional fields from your spec
+  icon         String?
+  iconColor    String?
+  profileImage String?          // URL of the sender's image
+  senderName   String?          // Name of the sender
+  data         Json?            // For storing extra data, e.g., { "meetupId": "..." }
+
+  createdAt    DateTime         @default(now())
+
+  @@index([userId, isRead]) // Index for fast fetching of user's unread notifications
 }

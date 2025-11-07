@@ -3,6 +3,7 @@ import { io } from "../socket/socketHandler.js";
 import AppError from "../utils/appError.js";
 import { calculateAge } from "../utils/helper.js";
 import { createChatForMeetup } from "./chat.service.js";
+import { createNotification } from "./notification.service.js";
 
 export const createJoinRequest = async (meetupId, senderId) => {
   const meetup = await prisma.meetup.findUnique({
@@ -49,16 +50,29 @@ export const createJoinRequest = async (meetupId, senderId) => {
     },
   });
 
+  // --- NEW: Trigger Notification ---
+  try {
+    await createNotification({
+      userId: meetup.createdBy, // The host receives this
+      type: 'joinRequest',
+      title: 'New Join Request',
+      subtitle: `${newRequest.sender.name} wants to join your meetup.`,
+      senderName: newRequest.sender.name,
+      profileImage: newRequest.sender.profilePhoto,
+      data: { meetupId: meetupId, requestId: newRequest.id }
+    });
+  } catch (err) { console.error('Failed to create join request notification:', err); }
+  
   // --- EMIT NOTIFICATION TO MEETUP CREATOR ---
-  if (io) {
-    const eventName = "new_join_request";
-    const payload = {
-      message: `${newRequest.sender.name} wants to join your meetup!`,
-      request: newRequest,
-    };
-    // Emit to the room named after the meetup creator's ID
-    io.to(meetup.createdBy).emit(eventName, payload);
-  }
+  // if (io) {
+  //   const eventName = "new_join_request";
+  //   const payload = {
+  //     message: `${newRequest.sender.name} wants to join your meetup!`,
+  //     request: newRequest,
+  //   };
+  //   // Emit to the room named after the meetup creator's ID
+  //   io.to(meetup.createdBy).emit(eventName, payload);
+  // }
 
   return newRequest;
 };
@@ -161,16 +175,27 @@ export const respondToRequest = async (requestId, userId, action) => {
         tx
       );
 
+      // --- NEW: Trigger Notification ---
+      try {
+        await createNotification({
+          userId: request.senderId, // The joiner receives this
+          type: 'joinRequest',
+          title: 'Request Accepted',
+          subtitle: `Your request to join the meetup has been accepted!`,
+          data: { meetupId: request.meetupId, request: updatedRequest  }
+        });
+      } catch (err) { console.error('Failed to create accept notification:', err); }
+
       // 4. Emit socket notification
-      if (io) {
-        const eventName = "join_request_update";
-        const payload = {
-          message: `Your request to join the meetup has been accepted`,
-          request: updatedRequest,
-        };
-        // Emit to the room named after the sender's ID
-        io.to(request.senderId).emit(eventName, payload);
-      }
+      // if (io) {
+      //   const eventName = "join_request_update";
+      //   const payload = {
+      //     message: `Your request to join the meetup has been accepted`,
+      //     request: updatedRequest,
+      //   };
+      //   // Emit to the room named after the sender's ID
+      //   io.to(request.senderId).emit(eventName, payload);
+      // }
 
       return updatedRequest;
     });
@@ -179,16 +204,29 @@ export const respondToRequest = async (requestId, userId, action) => {
       where: { id: requestId },
       data: { status: "REJECTED" },
     });
+
+
+    try {
+      await createNotification({
+        userId: request.senderId, // The joiner receives this
+        type: 'joinRequest',
+        title: 'Request Rejected',
+        subtitle: `Your request to join the meetup was rejected.`,
+        data: { meetupId: request.meetupId }
+      });
+    } catch (err) { console.error('Failed to create reject notification:', err); }
+
     // Emit socket notification for rejection
-    if (io) {
-      const eventName = "join_request_update";
-      const payload = {
-        message: `Your request to join the meetup has been rejected`,
-        request: updatedRequest,
-      };
-      // Emit to the room named after the sender's ID
-      io.to(request.senderId).emit(eventName, payload);
-    }
+    // if (io) {
+    //   const eventName = "join_request_update";
+    //   const payload = {
+    //     message: `Your request to join the meetup has been rejected`,
+    //     request: updatedRequest,
+    //   };
+    //   // Emit to the room named after the sender's ID
+    //   io.to(request.senderId).emit(eventName, payload);
+    // }
+    
     return updatedRequest;
   } else {
     throw new AppError("Invalid action", 400);

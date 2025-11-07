@@ -22,6 +22,7 @@ import userRoutes from './routes/user.routes.js';
 import uploadRoutes from './routes/upload.routes.js';
 import bannerRoutes from './routes/banner.routes.js';
 import chatRoutes from './routes/chat.routes.js';
+import notificationRoutes from './routes/notification.routes.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 
 
@@ -46,6 +47,7 @@ app.use('/api/v1/user', userRoutes);
 app.use('/api/v1/uploads', uploadRoutes);
 app.use('/api/v1/banners', bannerRoutes);
 app.use('/api/v1/chats', chatRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
 
 app.use(errorHandler);
 
