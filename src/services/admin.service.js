@@ -27,7 +27,8 @@ export const loginAdminWithPassword = async (mobileNumber, password) => {
   }
 
   // 4. Compare passwords
-  const isMatch = await comparePasswords(password, user.password);
+  // const isMatch = await comparePasswords(password, user.password);
+  const isMatch = password === user.password;
   if (!isMatch) {
     throw new AppError('Invalid credentials or not an admin', 401);
   }
