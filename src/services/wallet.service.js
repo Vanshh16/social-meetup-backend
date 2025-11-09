@@ -57,8 +57,7 @@ export const debitUserWallet = async (userId, amount, description, prismaClient 
     throw new AppError('Debit amount must be positive.', 400);
   }
 
-  return prismaClient.$transaction(async (tx) => {
-    const wallet = await tx.userWallet.findUnique({
+    const wallet = await prismaClient.userWallet.findUnique({
       where: { userId },
     });
 
@@ -70,13 +69,13 @@ export const debitUserWallet = async (userId, amount, description, prismaClient 
     }
 
     // 1. Decrease the wallet balance
-    await tx.userWallet.update({
+    await prismaClient.userWallet.update({
       where: { id: wallet.id },
       data: { balance: { decrement: amount } },
     });
 
     // 2. Record the transaction
-    const transaction = await tx.walletTransaction.create({
+    const transaction = await prismaClient.walletTransaction.create({
       data: {
         walletId: wallet.id,
         amount,
@@ -86,7 +85,6 @@ export const debitUserWallet = async (userId, amount, description, prismaClient 
     });
 
     return transaction;
-  });
 };
 
 /**
