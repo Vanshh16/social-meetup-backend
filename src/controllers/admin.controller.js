@@ -29,6 +29,10 @@ import {
   getReferralStats,
   getReferralHistory,
   loginAdminWithPassword,
+  getUserDetailsById,
+  getCategoryDashboardStats,
+  getWalletDashboardStats,
+  getAllWalletTransactions,
 } from "../services/admin.service.js";
 import { updateMeetup } from '../services/meetup.service.js'; // Reusing user-facing service
 import AppError from "../utils/appError.js";
@@ -63,6 +67,16 @@ export const getAllUsers = async (req, res, next) => {
     // res.status(200).json({ success: false, message: error.message });
     next(error);
   }
+};
+
+export const getUserDetailsController = async (req, res, next) => {
+    try {
+        const { userId } = req.params;
+        const user = await getUserDetailsById(userId);
+        res.status(200).json({ success: true, data: user });
+    } catch (error) {
+        next(error);
+    }
 };
 
 export const updateUserStatus = async (req, res, next) => {
@@ -102,11 +116,11 @@ export const createCategory = async (req, res, next) => {
 export const updateCategory = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name } = req.body;
-    const updatedCategory = await modifyCategory(id, name);
+    const updateData = req.body; // updateData will be { name, price, subcategories }
+
+    const updatedCategory = await modifyCategory(id, updateData);
     res.status(200).json({ success: true, data: updatedCategory });
   } catch (error) {
-    // res.status(200).json({ success: false, message: error.message });
     next(error);
   }
 };
@@ -115,13 +129,20 @@ export const deleteCategory = async (req, res, next) => {
   try {
     const { id } = req.params;
     await removeCategory(id);
-    res
-      .status(200)
-      .json({ success: true, message: "Category deleted successfully" });
+    res.status(200).json({ success: true, message: "Category deleted successfully" });
   } catch (error) {
     // res.status(200).json({ success: false, message: error.message });
     next(error);
   }
+};
+
+export const getCategoryStatsController = async (req, res, next) => {
+    try {
+        const stats = await getCategoryDashboardStats();
+        res.status(200).json({ success: true, data: stats });
+    } catch (error) {
+        next(error);
+    }
 };
 
 // --- New Wallet & Settings Controller Functions ---
@@ -147,14 +168,15 @@ export const setReferralReward = async (req, res, next) => {
   }
 };
 
-export const creditUserWallet = async (req, res, next) => {
+export const creditWalletController = async (req, res, next) => {
   try {
     const { userId } = req.params;
-    const { amount, description } = req.body;
+    const { amount, description, sendNotification } = req.body;
     const transaction = await manuallyCreditWallet({
       userId,
       amount,
       description,
+      sendNotification
     });
     res.status(200).json({ success: true, data: transaction });
   } catch (error) {
@@ -166,8 +188,8 @@ export const creditUserWallet = async (req, res, next) => {
 export const issueRewardController = async (req, res, next) => {
     try {
         const { userId } = req.params;
-        const { amount, description } = req.body;
-        const transaction = await issueRewardToWallet({ userId, amount, description });
+        const { amount, description, sendNotification } = req.body;
+        const transaction = await issueRewardToWallet({ userId, amount, description, sendNotification });
         res.status(200).json({ success: true, data: transaction });
     } catch (error) {
         next(error);
@@ -177,12 +199,30 @@ export const issueRewardController = async (req, res, next) => {
 export const debitWalletController = async (req, res, next) => {
     try {
         const { userId } = req.params;
-        const { amount, description } = req.body;
-        const transaction = await manuallyDebitWallet({ userId, amount, description });
+        const { amount, description, sendNotification } = req.body;
+        const transaction = await manuallyDebitWallet({ userId, amount, description, sendNotification });
         res.status(200).json({ success: true, data: transaction });
     } catch (error) {
         next(error);
     }
+};
+
+export const getWalletStatsController = async (req, res, next) => {
+  try {
+    const stats = await getWalletDashboardStats();
+    res.status(200).json({ success: true, data: stats });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getAllTransactionsController = async (req, res, next) => {
+  try {
+    const data = await getAllWalletTransactions(req.query);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const getReports = async (req, res, next) => {
@@ -320,8 +360,8 @@ export const exportUsersController = async (req, res, next) => {
 
 export const getAllMeetupsController = async (req, res, next) => {
     try {
-        const meetups = await fetchAllMeetups(req.query);
-        res.status(200).json({ success: true, data: meetups });
+        const data = await fetchAllMeetups(req.query);
+        res.status(200).json({ success: true, data });
     } catch (error) {
         next(error);
     }

@@ -59,6 +59,8 @@ model User {
 
   Chat Chat[] @relation("ChatUsers")
 
+   UserWallet     UserWallet?
+
   Message Message[]
 
   reportsMade     UserReport[] @relation("ReportedBy")
@@ -238,6 +240,7 @@ model SubCategory {
 model UserWallet {
   id            String    @id @default(uuid())
   userId        String    @unique
+  user          User      @relation(fields: [userId], references: [id])
   balance       Float     @default(0.0)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt

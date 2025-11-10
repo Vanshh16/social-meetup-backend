@@ -100,9 +100,9 @@ export const creditUserWallet = async (userId, amount, description, prismaClient
   }
 
   // Use the provided prismaClient (which could be the main client or a transaction client)
-  return prismaClient.$transaction(async (tx) => {
+  
     // 1. Find the user's wallet
-    const wallet = await tx.userWallet.findUnique({
+    const wallet = await prismaClient.userWallet.findUnique({
       where: { userId },
     });
 
@@ -111,13 +111,13 @@ export const creditUserWallet = async (userId, amount, description, prismaClient
     }
 
     // 2. Increase the wallet balance
-    await tx.userWallet.update({
+    await prismaClient.userWallet.update({
       where: { id: wallet.id },
       data: { balance: { increment: amount } },
     });
 
     // 3. Record the transaction
-    const transaction = await tx.walletTransaction.create({
+    const transaction = await prismaClient.walletTransaction.create({
       data: {
         walletId: wallet.id,
         amount,
@@ -127,5 +127,4 @@ export const creditUserWallet = async (userId, amount, description, prismaClient
     });
 
     return transaction;
-  });
 };

@@ -9,7 +9,6 @@ import {
   getAllCategories,
   getReferralReward,
   setReferralReward,
-  creditUserWallet,
   getReports,
   getReportDetails,
   updateReportStatus,
@@ -32,6 +31,11 @@ import {
   getReferralStatsController,
   getReferralHistoryController,
   adminLoginController,
+  getUserDetailsController,
+  getCategoryStatsController,
+  getWalletStatsController,
+  getAllTransactionsController,
+  creditWalletController,
 } from '../controllers/admin.controller.js';
 
 const router = Router();
@@ -47,6 +51,7 @@ router.use(requireAuth, requireRole(['ADMIN']));
 
 // --- User Management ---
 router.get('/users', getAllUsers);
+router.get('/users/:userId', getUserDetailsController);
 router.put('/users/:userId/status', updateUserStatus);
 
 // --- Category Management ---
@@ -54,6 +59,7 @@ router.get('/categories', getAllCategories);
 router.post('/categories', createCategory);
 router.put('/categories/:id', updateCategory);
 router.delete('/categories/:id', deleteCategory);
+router.get('/categories/stats', getCategoryStatsController);
 
 // --- Settings & Wallet Management ---
 router.get('/settings/referral-reward', getReferralReward);
@@ -77,11 +83,11 @@ router.post('/users/notify/bulk', sendBulkNotificationController);
 router.post('/notify/all', sendGlobalNotificationController);
 
 // --- Wallet Management ---
-router.post('/users/:userId/wallet/credit', creditUserWallet);
+router.post('/users/:userId/wallet/credit', creditWalletController);
 router.post('/users/:userId/wallet/reward', issueRewardController);
 router.post('/users/:userId/wallet/debit', debitWalletController);
-
-
+router.get('/wallet/stats', getWalletStatsController);
+router.get('/wallet/transactions', getAllTransactionsController);
 
 // // -----------------------LATESTTTT -----------------
 

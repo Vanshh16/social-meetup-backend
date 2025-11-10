@@ -3,6 +3,8 @@ import prisma from "../config/db.js";
 import { messaging } from "../config/firebase.js";
 import AppError from "../utils/appError.js";
 import { comparePasswords } from "../utils/password.js";
+import { createNotification } from "./notification.service.js";
+import { creditUserWallet, debitUserWallet } from "./wallet.service.js";
 
 /**
  * Authenticates an admin using mobile number and password.
@@ -17,20 +19,20 @@ export const loginAdminWithPassword = async (mobileNumber, password) => {
   });
 
   // 2. Check if user exists and is an admin
-  if (!user || user.role !== 'ADMIN') {
-    throw new AppError('Invalid credentials or not an admin', 401);
+  if (!user || user.role !== "ADMIN") {
+    throw new AppError("Invalid credentials or not an admin", 401);
   }
 
   // 3. Check if password is set
   if (!user.password) {
-      throw new AppError('Admin account not set up for password login.', 400);
+    throw new AppError("Admin account not set up for password login.", 400);
   }
 
   // 4. Compare passwords
   // const isMatch = await comparePasswords(password, user.password);
   const isMatch = password === user.password;
   if (!isMatch) {
-    throw new AppError('Invalid credentials or not an admin', 401);
+    throw new AppError("Invalid credentials or not an admin", 401);
   }
 
   // 5. Return user data (excluding password)
@@ -46,6 +48,7 @@ export const fetchAllUsers = async () => {
     select: {
       id: true,
       name: true,
+      profilePhoto: true,
       email: true,
       mobileNumber: true,
       role: true,
@@ -56,6 +59,52 @@ export const fetchAllUsers = async () => {
       createdAt: "desc",
     },
   });
+};
+
+/**
+ * Fetches the full, detailed profile of a specific user for the admin.
+ * @param {string} userId - The ID of the user to fetch.
+ */
+export const getUserDetailsById = async (userId) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    // Select all fields
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      mobileNumber: true,
+      isVerified: true,
+      role: true,
+      authMethod: true,
+      googleId: true,
+      profilePhoto: true,
+      gender: true,
+      dateOfBirth: true,
+      city: true,
+      referralCode: true,
+      referredById: true,
+      pictures: true,
+      fcmTokens: true,
+      bio: true,
+      hobbies: true,
+      createdAt: true,
+      updatedAt: true,
+      // You can also include relations like wallet or reports
+      UserWallet: {
+        select: { balance: true },
+      },
+      reportsAgainst: {
+        take: 5,
+        orderBy: { createdAt: "desc" },
+      },
+    },
+  });
+
+  if (!user) {
+    throw new AppError("User not found.", 404);
+  }
+  return user;
 };
 
 /**
@@ -95,6 +144,8 @@ export const fetchAllCategories = async () => {
 };
 
 export const addNewCategory = async (name, subcategories = []) => {
+  console.log(name, subcategories);
+  
   return prisma.category.create({
     data: {
       name,
@@ -105,10 +156,53 @@ export const addNewCategory = async (name, subcategories = []) => {
   });
 };
 
-export const modifyCategory = async (categoryId, newName) => {
-  return prisma.category.update({
-    where: { id: categoryId },
-    data: { name: newName },
+/**
+ * Modifies a category's name, price, and subcategories.
+ * This is an atomic operation: it all succeeds or all fails.
+ * @param {string} categoryId - The ID of the category to update.
+ * @param {object} updateData - An object containing { name, price, subcategories }.
+ */
+export const modifyCategory = async (categoryId, updateData) => {
+  const { name, price, subcategories } = updateData;
+
+  console.log(updateData);
+  
+  // 1. Prepare the simple update data for the category
+  const categoryUpdateData = {};
+  if (name) {
+    categoryUpdateData.name = name;
+  }
+  if (price !== undefined) {
+    categoryUpdateData.price = parseFloat(price);
+  }
+
+  // 2. Use a transaction to update relations safely
+  return prisma.$transaction(async (tx) => {
+    // Step A: Update the main category's name and/or price
+    const updatedCategory = await tx.category.update({
+      where: { id: categoryId },
+      data: categoryUpdateData,
+    });
+
+    // Step B: If a new list of subcategories was provided, replace the old ones
+    if (subcategories && Array.isArray(subcategories)) {
+      // B.1: Delete all old subcategories associated with this category
+      await tx.subCategory.deleteMany({
+        where: { categoryId: categoryId },
+      });
+
+      // B.2: Create all the new subcategories
+      if (subcategories.length > 0) {
+        await tx.subCategory.createMany({
+          data: subcategories.map(subName => ({
+            name: subName,
+            categoryId: categoryId,
+          })),
+        });
+      }
+    }
+
+    return updatedCategory;
   });
 };
 
@@ -124,6 +218,63 @@ export const removeCategory = async (categoryId) => {
   });
 };
 
+/**
+ * Fetches statistics for the category management dashboard.
+ */
+export const getCategoryDashboardStats = async () => {
+  // 1. Get total categories
+  const categoriesTotal = prisma.category.count();
+
+  // 2. Get active meetups (defined as meetups happening today or in the future)
+  const activeMeetups = prisma.meetup.count({
+    where: { date: { gte: new Date() } },
+  });
+
+  // 3. Get the top category
+  const topCategoryQuery = prisma.meetup.groupBy({
+    by: ['category'],
+    _count: {
+      category: true,
+    },
+    orderBy: {
+      _count: {
+        category: 'desc',
+      },
+    },
+    take: 1,
+  });
+
+  // 4. Get total unique locations (based on locationName)
+  const locationsTotalQuery = prisma.meetup.findMany({
+    select: { locationName: true },
+    distinct: ['locationName'],
+  });
+
+  // Run all queries at the same time
+  const [
+    totalCategories,
+    totalActiveMeetups,
+    topCategoryResult,
+    locationsResult
+  ] = await prisma.$transaction([
+    categoriesTotal,
+    activeMeetups,
+    topCategoryQuery,
+    locationsTotalQuery
+  ]);
+
+  // Format the results
+  const topCategory = topCategoryResult.length > 0 ? topCategoryResult[0].category : 'N/A';
+  const totalLocations = locationsResult.length;
+
+  return {
+    totalCategories,
+    totalActiveMeetups,
+    topCategory,
+    totalLocations,
+  };
+};
+
 const REFERRAL_REWARD_KEY = "REFERRAL_REWARD_AMOUNT";
 
 export const fetchReferralReward = async () => {
@@ -133,6 +284,7 @@ export const fetchReferralReward = async () => {
   // Return the stored value, or a default of 0 if not set
   return setting ? parseFloat(setting.value) : 0;
 };
+
 
 export const updateReferralReward = async (amount) => {
   if (typeof amount !== "number" || amount < 0) {
@@ -145,49 +297,137 @@ export const updateReferralReward = async (amount) => {
   });
 };
 
-export const manuallyCreditWallet = async ({ userId, amount, description }) => {
-  if (typeof amount !== "number" || amount <= 0) {
-    throw new AppError("Invalid credit amount.", 400);
-  }
 
-  // Use a transaction to ensure both operations (update wallet, create transaction record) succeed or fail together.
-  return prisma.$transaction(async (tx) => {
-    // 1. Find the user's wallet
-    const wallet = await tx.userWallet.findUnique({
-      where: { userId },
-    });
+/**
+ * Fetches statistics for the main wallet dashboard.
+ */
+export const getWalletDashboardStats = async () => {
+  // Get date for 'today'
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
-    if (!wallet) {
-      throw new AppError("User wallet not found.", 404);
-    }
-
-    // 2. Update the wallet balance
-    await tx.userWallet.update({
-      where: { id: wallet.id },
-      data: {
-        balance: {
-          increment: amount,
-        },
-      },
-    });
-
-    // 3. Create a transaction record for auditing
-    const transaction = await tx.walletTransaction.create({
-      data: {
-        walletId: wallet.id,
-        amount: amount,
-        type: "CREDIT",
-        description: description || "Manual credit by admin",
-      },
-    });
-
-    return transaction;
+  // 1. Get total balance of all user wallets
+  const totalBalance = prisma.userWallet.aggregate({
+    _sum: { balance: true },
   });
+
+  // 2. Get transactions made today
+  const transactionsToday = prisma.walletTransaction.count({
+    where: { createdAt: { gte: today } },
+  });
+
+  // 3. Get refunds processed (assuming description contains 'refund')
+  const refundsProcessed = prisma.walletTransaction.count({
+    where: {
+      type: 'CREDIT',
+      description: { contains: 'refund', mode: 'insensitive' },
+    },
+  });
+
+//   const pendingWithdrawals = prisma.walletTransaction.aggregate({
+//   where: {
+//     type: 'DEBIT',
+//     description: { contains: 'pending', mode: 'insensitive' },
+//   },
+//   _sum: { amount: true },
+// });
+
+  // 4. Get pending withdrawals (assuming a 'DEBIT' with 'PENDING' status)
+  // This requires a 'status' field on WalletTransaction, which you may want to add.
+  // For now, we'll placeholder this.
+  // const pendingWithdrawals = { _sum: { amount: 0 } }; // Placeholder
+
+  // Run all queries in parallel
+  const [balanceResult, todayCount, refundCount, pendingResult] = await prisma.$transaction([
+    totalBalance,
+    transactionsToday,
+    refundsProcessed,
+  ]);
+
+  return {
+    totalWalletBalance: balanceResult._sum.balance || 0,
+    transactionsToday: todayCount,
+    refundsProcessed: refundCount,
+    pendingWithdrawals: 0,
+  };
 };
 
-// --- NEW: Function to issue a reward ---
+/**
+ * Fetches all wallet transactions with filtering and pagination.
+ */
+export const getAllWalletTransactions = async (query) => {
+  console.log(query);
+  
+  const { page = 1, limit = 10, searchTerm, type, userId } = query;
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+  const take = parseInt(limit);
+
+  const whereClause = {};
+
+  if (userId && userId !== 'all') {
+    whereClause.wallet = { userId: userId };
+  }
+
+  if (type && type !== 'all') {
+    whereClause.type = type; // Assumes type matches 'CREDIT', 'DEBIT', 'REWARD'
+  }
+
+  if (searchTerm) {
+    whereClause.OR = [
+      { description: { contains: searchTerm, mode: 'insensitive' } },
+      { wallet: { user: { name: { contains: searchTerm, mode: 'insensitive' } } } },
+      { wallet: { user: { mobileNumber: { contains: searchTerm, mode: 'insensitive' } } } },
+    ];
+  }
+
+  const [transactions, total] = await prisma.$transaction([
+    prisma.walletTransaction.findMany({
+      where: whereClause,
+      include: {
+        wallet: { // To get the user's details
+          select: {
+            user: { select: { id: true, name: true } }
+          }
+        }
+      },
+      skip,
+      take,
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.walletTransaction.count({ where: whereClause }),
+  ]);
+
+  // Format the data to match your frontend's expectation
+  const formattedTransactions = transactions.map(t => ({
+    id: t.id,
+    date: t.createdAt,
+    user: t.wallet.user.name,
+    userId: t.wallet.user.id,
+    type: t.type,
+    amount: t.type === 'DEBIT' ? -t.amount : t.amount,
+    balanceAfter: t.wallet.balance, // Note: This is current balance, not historical
+    admin: "Admin", // Placeholder, you may need to store this
+    reason: t.description,
+    status: "COMPLETED", // Placeholder
+  }));
+  
+  // Get a list of all users who have transactions for the filter dropdown
+  const usersWithTransactions = await prisma.user.findMany({
+      where: { UserWallet: { transactions: { some: {} } } },
+      select: { id: true, name: true }
+  });
+
+  return { 
+    transactions: formattedTransactions,
+    uniqueUsers: usersWithTransactions,
+    totalPages: Math.ceil(total / take),
+    totalTransactions: total
+  };
+};
+
+// --- Function to issue a reward ---
 export const issueRewardToWallet = async ({ userId, amount, description }) => {
-  return prisma.$transaction(async (tx) => {
+  const transaction = prisma.$transaction(async (tx) => {
     const wallet = await tx.userWallet.update({
       where: { userId },
       data: { balance: { increment: amount } },
@@ -196,17 +436,100 @@ export const issueRewardToWallet = async ({ userId, amount, description }) => {
       data: {
         walletId: wallet.id,
         amount,
-        type: 'REWARD',
-        description: description || 'Reward issued by admin',
+        type: "REWARD",
+        description: description || "Reward issued by admin",
       },
     });
   });
+
+  if (sendNotification) {
+    try {
+      await createNotification({
+        userId: userId,
+        type: 'other',
+        title: `Reward Received: ₹${amount}`,
+        subtitle: description || 'You received a reward!',
+      });
+    } catch (err) { console.error('Failed to send reward notification:', err); }
+  }
+
+  return transaction;
+};
+
+// --- Function for an admin to credit a wallet ---
+export const manuallyCreditWallet = async ({ userId, amount, description, sendNotification = false }) => {
+  if (typeof amount !== "number" || amount <= 0) {
+    throw new AppError("Invalid credit amount.", 400);
+  }
+
+  const transaction = creditUserWallet(userId, amount, description || "Manual credit by admin" )
+  // Use a transaction to ensure both operations (update wallet, create transaction record) succeed or fail together.
+  // const transaction = prisma.$transaction(async (tx) => {
+  //   // 1. Find the user's wallet
+  //   const wallet = await tx.userWallet.findUnique({
+  //     where: { userId },
+  //   });
+
+  //   if (!wallet) {
+  //     throw new AppError("User wallet not found.", 404);
+  //   }
+
+  //   // 2. Update the wallet balance
+  //   await tx.userWallet.update({
+  //     where: { id: wallet.id },
+  //     data: {
+  //       balance: {
+  //         increment: amount,
+  //       },
+  //     },
+  //   });
+
+  //   // 3. Create a transaction record for auditing
+  //   const newTransaction = await tx.walletTransaction.create({
+  //     data: {
+  //       walletId: wallet.id,
+  //       amount: amount,
+  //       type: "CREDIT",
+  //       description: description || "Manual credit by admin",
+  //     },
+  //   });
+
+  //   return newTransaction;
+  // });
+
+  if (sendNotification) {
+    try {
+      await createNotification({
+        userId: userId,
+        type: 'other',
+        title: `Wallet Credited: ₹${amount}`,
+        subtitle: description || 'An admin has credited your wallet.',
+      });
+    } catch (err) { console.error('Failed to send credit notification:', err); }
+  }
+
+  return transaction;
 };
 
 // --- Function for an admin to debit a wallet ---
-export const manuallyDebitWallet = async ({ userId, amount, description }) => {
+export const manuallyDebitWallet = async ({ userId, amount, description, sendNotification = false }) => {
   // Uses the same logic as the user-facing debit function
-  return debitUserWallet(userId, amount, description || 'Manual debit by admin');
+  const transaction = debitUserWallet(
+    userId,
+    amount,
+    description || "Manual debit by admin"
+  );
+  if (sendNotification) {
+    try {
+      await createNotification({
+        userId: userId,
+        type: 'other',
+        title: `Wallet Debited: ₹${amount}`,
+        subtitle: description || 'An admin has debited your wallet.',
+      });
+    } catch (err) { console.error('Failed to send credit notification:', err); }
+  }
+  return transaction;
 };
 
 export const fetchAllReports = async () => {
@@ -432,7 +755,7 @@ export const sendNotificationToMultipleUsers = async (userIds, title, body) => {
   try {
     const response = await messaging.sendEachForMulticast(message);
     // console.log(response);
-    
+
     if (response.failureCount > 0) {
       const failedTokens = [];
       response.responses.forEach((resp, idx) => {
@@ -494,9 +817,6 @@ export const sendNotificationToAllUsers = async (title, body) => {
   }
 };
 
-
-
-
 // ----------------------------- LATEST -----------------------------
 
 /**
@@ -504,34 +824,34 @@ export const sendNotificationToAllUsers = async (title, body) => {
  * @param {object} query - The search query (e.g., { search: 'Rahul', status: 'ACTIVE' }).
  */
 export const searchUsers = async (query) => {
-    const whereClause = {};
+  const whereClause = {};
 
-    if (query.search) {
-        whereClause.OR = [
-            { name: { contains: query.search, mode: 'insensitive' } },
-            { email: { contains: query.search, mode: 'insensitive' } },
-            { mobileNumber: { contains: query.search, mode: 'insensitive' } },
-        ];
-    }
+  if (query.search) {
+    whereClause.OR = [
+      { name: { contains: query.search, mode: "insensitive" } },
+      { email: { contains: query.search, mode: "insensitive" } },
+      { mobileNumber: { contains: query.search, mode: "insensitive" } },
+    ];
+  }
 
-    if (query.status) {
-        if (query.status === 'ACTIVE') whereClause.isSuspended = false;
-        if (query.status === 'SUSPENDED') whereClause.isSuspended = true;
-        // Add more status filters as needed (e.g., PENDING for !isVerified)
-    }
+  if (query.status) {
+    if (query.status === "ACTIVE") whereClause.isSuspended = false;
+    if (query.status === "SUSPENDED") whereClause.isSuspended = true;
+    // Add more status filters as needed (e.g., PENDING for !isVerified)
+  }
 
-    return prisma.user.findMany({
-        where: whereClause,
-        select: {
-            id: true,
-            name: true,
-            email: true,
-            mobileNumber: true,
-            isVerified: true,
-            isSuspended: true, // Assuming you add this to your schema
-            createdAt: true,
-        },
-    });
+  return prisma.user.findMany({
+    where: whereClause,
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      mobileNumber: true,
+      isVerified: true,
+      isSuspended: true, // Assuming you add this to your schema
+      createdAt: true,
+    },
+  });
 };
 
 /**
@@ -539,34 +859,34 @@ export const searchUsers = async (query) => {
  * @param {object} userData - The data for the new user.
  */
 export const createUserByAdmin = async (userData) => {
-    // You might want to add password generation logic here
-    return prisma.user.create({
-        data: {
-            ...userData,
-            authMethod: 'MOBILE_OTP' // Or a default method
-        },
-    });
+  // You might want to add password generation logic here
+  return prisma.user.create({
+    data: {
+      ...userData,
+      authMethod: "MOBILE_OTP", // Or a default method
+    },
+  });
 };
 
 /**
  * Exports the current user list to a CSV format.
  */
 export const exportUsersToCsv = async () => {
-    const users = await prisma.user.findMany({
-        select: {
-            id: true,
-            name: true,
-            email: true,
-            mobileNumber: true,
-            isVerified: true,
-            isSuspended: true,
-            createdAt: true,
-        },
-    });
+  const users = await prisma.user.findMany({
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      mobileNumber: true,
+      isVerified: true,
+      isSuspended: true,
+      createdAt: true,
+    },
+  });
 
-    const json2csvParser = new Parser();
-    const csv = json2csvParser.parse(users);
-    return csv;
+  const json2csvParser = new Parser();
+  const csv = json2csvParser.parse(users);
+  return csv;
 };
 
 /**
@@ -574,21 +894,106 @@ export const exportUsersToCsv = async () => {
  * @param {object} query - The filter query (e.g., { status: 'PENDING' }).
  */
 export const fetchAllMeetups = async (query) => {
-    const whereClause = {};
+  const {
+    page = 1,
+    limit = 10,
+    status,
+    type,
+    category,
+    subcategory,
+    city,
+    dateFrom,
+    dateTo,
+    search,
+  } = query;
 
-    // Example filter by status (you can add more for date, category, etc.)
-    if (query.status) {
-        whereClause.status = query.status.toUpperCase();
-    }
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+  const take = parseInt(limit);
 
-    return prisma.meetup.findMany({
-        where: whereClause,
-        include: {
-            user: { select: { name: true } }, // Creator's name
-            _count: { select: { JoinRequest: true } } // Count of participants
+  // --- Dynamic WHERE conditions ---
+  const whereClause = {};
+
+  // ✅ Filter by status (active, cancelled, etc.)
+  if (status && status !== "ALL") {
+    whereClause.status = status.toUpperCase();
+  }
+
+  // ✅ Filter by type (instant, planned)
+  if (type && type !== "ALL") {
+    whereClause.type = type.toLowerCase();
+  }
+
+  // ✅ Filter by category / subcategory
+  if (category && category !== "ALL") {
+    whereClause.category = category;
+  }
+
+  if (subcategory && subcategory !== "ALL") {
+    whereClause.subcategory = subcategory;
+  }
+
+  // ✅ Filter by city / locationName (case-insensitive)
+  if (city) {
+    whereClause.locationName = {
+      contains: city,
+      mode: "insensitive",
+    };
+  }
+
+  // ✅ Safe date parsing
+  const parsedFrom = dateFrom && !isNaN(Date.parse(dateFrom)) ? new Date(dateFrom) : null;
+  const parsedTo = dateTo && !isNaN(Date.parse(dateTo)) ? new Date(dateTo) : null;
+
+  if (parsedFrom || parsedTo) {
+    whereClause.date = {};
+    if (parsedFrom) whereClause.date.gte = parsedFrom;
+    if (parsedTo) whereClause.date.lte = parsedTo;
+  }
+
+
+  // ✅ Search by category, subcategory, or locationName
+  if (search) {
+    whereClause.OR = [
+      { category: { contains: search, mode: "insensitive" } },
+      { subcategory: { contains: search, mode: "insensitive" } },
+      { locationName: { contains: search, mode: "insensitive" } },
+    ];
+  }
+
+  // --- Fetch data + total count atomically ---
+  const [meetups, total] = await prisma.$transaction([
+    prisma.meetup.findMany({
+      where: whereClause,
+      include: {
+        user: { select: { id: true, name: true } },
+        JoinRequest: {
+          where: { status: "ACCEPTED" },
+          select: { id: true },
         },
-        orderBy: { createdAt: 'desc' }
-    });
+      },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take,
+    }),
+
+    prisma.meetup.count({ where: whereClause }),
+  ]);
+
+  // --- Map participant count ---
+  const meetupsWithCount = meetups.map((meetup) => ({
+    ...meetup,
+    participantCount: meetup.JoinRequest.length,
+  }));
+
+  return {
+      meetups: meetupsWithCount,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(total / take),
+        totalItems: total,
+        limit: take,
+      },
+    };
 };
 
 /**
@@ -596,39 +1001,42 @@ export const fetchAllMeetups = async (query) => {
  * @param {object} meetupData - The data for the new meetup.
  */
 export const scheduleMeetupByAdmin = async (meetupData) => {
-    // You'll need to decide which user to assign as the creator,
-    // or you could have a generic "system" user for admin-created meetups.
-    if (!meetupData.createdBy) {
-        throw new AppError("A 'createdBy' userId is required to schedule a meetup.", 400);
-    }
-    return prisma.meetup.create({
-        data: meetupData,
-    });
+  // You'll need to decide which user to assign as the creator,
+  // or you could have a generic "system" user for admin-created meetups.
+  if (!meetupData.createdBy) {
+    throw new AppError(
+      "A 'createdBy' userId is required to schedule a meetup.",
+      400
+    );
+  }
+  return prisma.meetup.create({
+    data: meetupData,
+  });
 };
 
 /**
  * Fetches reward statistics for the admin dashboard.
  */
 export const getRewardStats = async () => {
-    // These would be more complex aggregate queries in a real scenario
-    const totalRewardsPaid = await prisma.walletTransaction.aggregate({
-        _sum: { amount: true },
-        where: { type: 'REWARD' },
-    });
+  // These would be more complex aggregate queries in a real scenario
+  const totalRewardsPaid = await prisma.walletTransaction.aggregate({
+    _sum: { amount: true },
+    where: { type: "REWARD" },
+  });
 
-    const referralRewards = await prisma.walletTransaction.aggregate({
-        _sum: { amount: true },
-        where: { type: 'REWARD', description: { contains: 'referral' } },
-    });
+  const referralRewards = await prisma.walletTransaction.aggregate({
+    _sum: { amount: true },
+    where: { type: "REWARD", description: { contains: "referral" } },
+  });
 
-    // You would add a similar query for meetup completion rewards once implemented.
-    const meetupRewards = 0; // Placeholder
+  // You would add a similar query for meetup completion rewards once implemented.
+  const meetupRewards = 0; // Placeholder
 
-    return {
-        totalRewardsPaid: totalRewardsPaid._sum.amount || 0,
-        referralRewards: referralRewards._sum.amount || 0,
-        meetupRewards: meetupRewards,
-    };
+  return {
+    totalRewardsPaid: totalRewardsPaid._sum.amount || 0,
+    referralRewards: referralRewards._sum.amount || 0,
+    meetupRewards: meetupRewards,
+  };
 };
 
 /**
@@ -637,109 +1045,116 @@ export const getRewardStats = async () => {
  * For now, we return a placeholder.
  */
 export const getRewardHistory = async () => {
-    // Placeholder - A real implementation would query an audit log table.
-    return [
-        { date: '2025-09-15', rewardType: 'Referral Reward', previousAmount: 10, newAmount: 5, changedBy: 'Admin', reason: 'Cost optimization' }
-    ];
+  // Placeholder - A real implementation would query an audit log table.
+  return [
+    {
+      date: "2025-09-15",
+      rewardType: "Referral Reward",
+      previousAmount: 10,
+      newAmount: 5,
+      changedBy: "Admin",
+      reason: "Cost optimization",
+    },
+  ];
 };
 
 /**
  * Fetches key statistics for the referral dashboard.
  */
 export const getReferralStats = async () => {
-    const totalReferrals = await prisma.user.count({
-        where: { referredById: { not: null } },
+  const totalReferrals = await prisma.user.count({
+    where: { referredById: { not: null } },
+  });
+
+  const successfulReferrals = await prisma.user.count({
+    where: {
+      referredById: { not: null },
+      isVerified: true,
+    },
+  });
+
+  const totalRewardsPaid = await prisma.walletTransaction.aggregate({
+    _sum: { amount: true },
+    where: {
+      type: "REWARD",
+      description: { contains: "referral" },
+    },
+  });
+
+  // This is a more complex query to find the top referrer
+  const topReferrers = await prisma.user.groupBy({
+    by: ["referredById"],
+    _count: {
+      referredById: true,
+    },
+    where: { referredById: { not: null } },
+    orderBy: {
+      _count: {
+        referredById: "desc",
+      },
+    },
+    take: 1,
+  });
+
+  let topReferrerData = null;
+  if (topReferrers.length > 0) {
+    const topReferrerUser = await prisma.user.findUnique({
+      where: { id: topReferrers[0].referredById },
+      select: { name: true },
     });
-
-    const successfulReferrals = await prisma.user.count({
-        where: {
-            referredById: { not: null },
-            isVerified: true,
-        },
-    });
-
-    const totalRewardsPaid = await prisma.walletTransaction.aggregate({
-        _sum: { amount: true },
-        where: {
-            type: 'REWARD',
-            description: { contains: 'referral' },
-        },
-    });
-
-    // This is a more complex query to find the top referrer
-    const topReferrers = await prisma.user.groupBy({
-        by: ['referredById'],
-        _count: {
-            referredById: true,
-        },
-        where: { referredById: { not: null } },
-        orderBy: {
-            _count: {
-                referredById: 'desc',
-            },
-        },
-        take: 1,
-    });
-
-    let topReferrerData = null;
-    if (topReferrers.length > 0) {
-        const topReferrerUser = await prisma.user.findUnique({
-            where: { id: topReferrers[0].referredById },
-            select: { name: true },
-        });
-        topReferrerData = {
-            name: topReferrerUser.name,
-            count: topReferrers[0]._count.referredById,
-        };
-    }
-
-    return {
-        totalReferrals,
-        successfulReferrals,
-        totalRewardsPaid: totalRewardsPaid._sum.amount || 0,
-        topReferrer: topReferrerData,
+    topReferrerData = {
+      name: topReferrerUser.name,
+      count: topReferrers[0]._count.referredById,
     };
+  }
+
+  return {
+    totalReferrals,
+    successfulReferrals,
+    totalRewardsPaid: totalRewardsPaid._sum.amount || 0,
+    topReferrer: topReferrerData,
+  };
 };
 
 /**
  * Fetches the detailed history of all referrals.
  */
 export const getReferralHistory = async (query) => {
-    const whereClause = {
-        referredById: { not: null }
-    };
+  const whereClause = {
+    referredById: { not: null },
+  };
 
-    // Example filter by status
-    if (query.status === 'COMPLETED') whereClause.isVerified = true;
-    if (query.status === 'PENDING') whereClause.isVerified = false;
+  // Example filter by status
+  if (query.status === "COMPLETED") whereClause.isVerified = true;
+  if (query.status === "PENDING") whereClause.isVerified = false;
 
-    const referredUsers = await prisma.user.findMany({
-        where: whereClause,
-        select: {
-            id: true,
-            name: true,
-            createdAt: true,
-            isVerified: true,
-            referredById: true,
-        },
-        orderBy: { createdAt: 'desc' }
-    });
+  const referredUsers = await prisma.user.findMany({
+    where: whereClause,
+    select: {
+      id: true,
+      name: true,
+      createdAt: true,
+      isVerified: true,
+      referredById: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
 
-    // Now, fetch the referrer details for each
-    const referrerIds = [...new Set(referredUsers.map(u => u.referredById))];
-    const referrers = await prisma.user.findMany({
-        where: { id: { in: referrerIds } },
-        select: { id: true, name: true }
-    });
-    
-    const referrersMap = new Map(referrers.map(r => [r.id, r]));
+  // Now, fetch the referrer details for each
+  const referrerIds = [...new Set(referredUsers.map((u) => u.referredById))];
+  const referrers = await prisma.user.findMany({
+    where: { id: { in: referrerIds } },
+    select: { id: true, name: true },
+  });
 
-    return referredUsers.map(user => ({
-        referredUser: { id: user.id, name: user.name },
-        referrer: referrersMap.get(user.referredById),
-        date: user.createdAt,
-        status: user.isVerified ? 'COMPLETED' : 'PENDING VERIFICATION',
-        // You would look up the reward amount from the transaction table in a full implementation
-        rewardAmount: user.isVerified ? 5 : 0, // Placeholder
-    }));
+  const referrersMap = new Map(referrers.map((r) => [r.id, r]));
+
+  return referredUsers.map((user) => ({
+    referredUser: { id: user.id, name: user.name },
+    referrer: referrersMap.get(user.referredById),
+    date: user.createdAt,
+    status: user.isVerified ? "COMPLETED" : "PENDING VERIFICATION",
+    // You would look up the reward amount from the transaction table in a full implementation
+    rewardAmount: user.isVerified ? 5 : 0, // Placeholder
+  }));
 };
