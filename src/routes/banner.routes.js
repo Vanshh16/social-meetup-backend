@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { requireAuth, requireRole } from '../middlewares/auth.middleware.js';
 import { bannerUpload } from '../config/cloudinary.js';
-import { createBannerController, deleteBannerController, getBannersController } from '../controllers/banner.controller.js';
+import { createBannerController, deleteBannerController, getBannersController, updateBannerController } from '../controllers/banner.controller.js';
 
 const router = Router();
 
@@ -27,4 +27,12 @@ router.delete(
     deleteBannerController
 );
 
+router.patch(
+    '/:id',
+    requireAuth,
+    requireRole(['ADMIN']),
+    bannerUpload.single('image'), // 'image' is the field name
+    updateBannerController
+);
+ 
 export default router;

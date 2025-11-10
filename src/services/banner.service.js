@@ -45,3 +45,66 @@ export const deleteBanner = async (bannerId) => {
     throw err; // unexpected error → 500
   }
 };
+
+// Helper function to extract the public_id from a full Cloudinary URL
+const getPublicIdFromUrl = (url) => {
+  try {
+    const parts = url.split('/');
+    // Assumes URL format: .../upload/v12345/folder/public_id.jpg
+    const publicIdWithExtension = parts.slice(-2).join('/');
+    const publicId = publicIdWithExtension.split('.').slice(0, -1).join('.');
+    return publicId;
+  } catch (e) {
+    console.error('Could not parse public_id from URL:', url, e);
+    return null;
+  }
+};
+
+/**
+ * Updates an existing banner.
+ * @param {string} bannerId - The ID of the banner to update.
+ * @param {object} updateData - Data to update: { title, isActive, newImageUrl }
+ */
+export const updateBanner = async (bannerId, updateData) => {
+  const { title, isActive, newImageUrl } = updateData;
+
+  // 1. Find the banner to get the old image URL
+  const existingBanner = await prisma.banner.findUnique({
+    where: { id: bannerId },
+  });
+  if (!existingBanner) {
+    throw new AppError('Banner not found', 404);
+  }
+
+  const dataToUpdate = {};
+
+  // 2. Build the update object with whatever was provided
+  if (title) {
+    dataToUpdate.title = title;
+  }
+  if (isActive !== undefined) {
+    // Convert string 'true'/'false' from form-data to boolean
+    dataToUpdate.isActive = (isActive === 'true' || isActive === true);
+  }
+  if (newImageUrl) {
+    dataToUpdate.imageUrl = newImageUrl;
+  }
+
+  // 3. If a new image was uploaded, delete the old one from Cloudinary
+  if (newImageUrl && existingBanner.imageUrl) {
+    const oldPublicId = getPublicIdFromUrl(existingBanner.imageUrl);
+    if (oldPublicId) {
+      console.log(`Deleting old banner image: ${oldPublicId}`);
+      // Fire-and-forget deletion. No need to wait for this.
+      cloudinary.uploader.destroy(oldPublicId, (error, result) => {
+        if (error) console.error('Failed to delete old banner image from Cloudinary:', error);
+      });
+    }
+  }
+
+  // 4. Update the banner in the database
+  return prisma.banner.update({
+    where: { id: bannerId },
+    data: dataToUpdate,
+  });
+};

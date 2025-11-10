@@ -108,27 +108,81 @@ export const getUserDetailsById = async (userId) => {
 };
 
 /**
- * Updates a user's status fields like role or verification.
+ * Updates a user's status AND creates a log entry.
+ * @param {string} adminId - The ID of the admin performing the action.
  * @param {string} userId - The ID of the user to update.
- * @param {object} data - The data to update, e.g., { role: 'USER', isVerified: false }.
+ * @param {object} data - The data to update, e.g., { isSuspended: true, reason: 'Spam' }.
  */
-export const modifyUserStatus = async (userId, data) => {
-  // We can add more specific validation here if needed
-  const { role, isVerified } = data;
+export const modifyUserStatus = async (adminId, userId, data) => {
+  const { isSuspended, reason } = data; // Get 'isSuspended' and 'reason'
 
-  return prisma.user.update({
-    where: { id: userId },
-    data: {
-      role,
-      isVerified,
-    },
-    select: {
-      id: true,
-      name: true,
-      role: true,
-      isVerified: true,
-    },
+  // We only care about changes to 'isSuspended' for this logic
+  if (isSuspended === undefined) {
+    // If just changing 'role' or 'isVerified', just do the update
+    return prisma.user.update({
+      where: { id: userId },
+      data: { role: data.role, isVerified: data.isVerified }
+    });
+  }
+
+  // This is a suspension or un-suspension action
+  const action = isSuspended ? 'SUSPEND' : 'UNSUSPEND';
+
+  // Run as a transaction to ensure both operations succeed or fail together
+  return prisma.$transaction(async (tx) => {
+    // 1. Update the user's status
+    const updatedUser = await tx.user.update({
+      where: { id: userId },
+      data: { isSuspended },
+      select: { id: true, name: true, role: true, isVerified: true, isSuspended: true },
+    });
+
+    // 2. Create the log entry
+    await tx.suspensionLog.create({
+      data: {
+        userId: userId,
+        adminId: adminId,
+        action: action,
+        reason: reason || (action === 'SUSPEND' ? 'No reason provided.' : 'User unsuspended.'),
+      },
+    });
+
+    return updatedUser;
   });
+};
+
+/**
+ * Fetches the suspension history log with pagination.
+ */
+export const getSuspensionHistory = async (query) => {
+  const { page = 1, limit = 10, userId } = query;
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+  const take = parseInt(limit);
+
+  const whereClause = {};
+  if (userId) {
+    whereClause.userId = userId; // Filter by a specific user
+  }
+
+  const [logs, total] = await prisma.$transaction([
+    prisma.suspensionLog.findMany({
+      where: whereClause,
+      include: {
+        user: { select: { id: true, name: true, profilePhoto: true } }, // The user who was actioned
+        admin: { select: { id: true, name: true } }, // The admin who did it
+      },
+      skip,
+      take,
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.suspensionLog.count({ where: whereClause }),
+  ]);
+
+  return {
+    history: logs,
+    totalPages: Math.ceil(total / take),
+    totalLogs: total,
+  };
 };
 
 // --- Category Service Functions ---
@@ -532,16 +586,151 @@ export const manuallyDebitWallet = async ({ userId, amount, description, sendNot
   return transaction;
 };
 
-export const fetchAllReports = async () => {
-  return prisma.userReport.findMany({
-    orderBy: {
-      createdAt: "desc",
-    },
-    include: {
-      reporter: { select: { id: true, name: true } },
-      reported: { select: { id: true, name: true } },
+
+// ----- Reports Services -----
+
+/**
+ * Fetches statistics for the reports dashboard.
+ */
+export const getReportStats = async () => {
+  // Get date for 'today'
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Define status constants based on your frontend
+  // NOTE: You'll need to add 'IN_PROGRESS' and 'DISMISSED' to your Prisma schema enum
+  const newReports = prisma.userReport.count({
+    where: { status: 'PENDING' }, // 'PENDING' is your 'NEW'
+  });
+
+  const inProgress = prisma.userReport.count({
+    where: { status: 'IN_PROGRESS' },
+  });
+
+  const resolvedToday = prisma.userReport.count({
+    where: {
+      status: 'RESOLVED',
+      updatedAt: { gte: today }, // Assuming 'updatedAt' is changed on status update
     },
   });
+  
+  const falseReports = prisma.userReport.count({
+      where: { status: 'DISMISSED' }
+  });
+
+  // Run all queries at the same time
+  const [
+    totalNew,
+    totalInProgress,
+    totalResolved,
+    totalFalse
+  ] = await prisma.$transaction([
+    newReports,
+    inProgress,
+    resolvedToday,
+    falseReports
+  ]);
+
+  return {
+    newReports: { value: totalNew, trend: 0 },
+    inProgress: { value: totalInProgress, trend: 0 },
+    resolvedToday: { value: totalResolved, trend: 0 },
+    falseReports: { value: totalFalse, trend: 0 },
+  };
+};
+
+/**
+ * Fetches all reports with filtering and pagination.
+ */
+export const fetchAllReports = async (query) => {
+  const { page = 1, limit = 10, status, type } = query;
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+  const take = parseInt(limit);
+
+  const whereClause = {};
+  if (status) whereClause.status = status;
+  if (type) whereClause.reason = type; // Assuming 'type' maps to 'reason'
+
+  const [reports, total] = await prisma.$transaction([
+    prisma.userReport.findMany({
+      where: whereClause,
+      include: {
+        reporter: { select: { id: true, name: true } },
+        reported: { select: { id: true, name: true } },
+      },
+      skip,
+      take,
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.userReport.count({ where: whereClause }),
+  ]);
+
+  return { 
+    reports,
+    totalPages: Math.ceil(total / take),
+    totalReports: total
+  };
+};
+
+/**
+ * Gets a count of reports grouped by reason/type.
+ */
+export const getReportBreakdown = async () => {
+  const breakdown = await prisma.userReport.groupBy({
+    by: ['reason'],
+    _count: {
+      reason: true,
+    },
+    orderBy: {
+      _count: {
+        reason: 'desc',
+      },
+    },
+  });
+
+  // Format for the frontend (e.g., for a chart)
+  return breakdown.map(item => ({
+    name: item.reason,
+    count: item._count.reason,
+  }));
+};
+
+// Helper function to format milliseconds into a readable string
+const formatDuration = (ms) => {
+  if (ms === null || isNaN(ms) || ms === 0) return 'N/A';
+  if (ms < 60000) return `${Math.round(ms / 1000)} seconds`;
+  if (ms < 3600000) return `${Math.round(ms / 60000)} minutes`;
+  if (ms < 86400000) return `${(ms / 3600000).toFixed(1)} hours`;
+  return `${(ms / 86400000).toFixed(1)} days`;
+};
+
+/**
+ * Calculates average, min, and max resolution times for reports.
+ */
+export const getResolutionTimeStats = async () => {
+  // This query calculates the difference between updatedAt and createdAt in seconds
+  const result = await prisma.$queryRaw`
+    SELECT 
+      AVG(EXTRACT(EPOCH FROM "updatedAt" - "createdAt")) AS avg,
+      MIN(EXTRACT(EPOCH FROM "updatedAt" - "createdAt")) AS min,
+      MAX(EXTRACT(EPOCH FROM "updatedAt" - "createdAt")) AS max
+    FROM "UserReport"
+    WHERE "status" = 'RESOLVED'
+  `;
+  
+  const stats = result[0] || { avg: 0, min: 0, max: 0 };
+
+  // Convert seconds (from EPOCH) to milliseconds for the helper function
+  const avgMs = stats.avg ? stats.avg * 1000 : null;
+  const minMs = stats.min ? stats.min * 1000 : null;
+  const maxMs = stats.max ? stats.max * 1000 : null;
+
+  // Format the data to perfectly match your frontend's needs
+  return [
+    { label: 'Average resolution time', value: formatDuration(avgMs) },
+    { label: 'Fastest resolution', value: formatDuration(minMs), color: 'tw-text-green-600' },
+    { label: 'Slowest resolution', value: formatDuration(maxMs), color: 'tw-text-red-600' }
+  ];
 };
 
 export const fetchReportDetails = async (reportId) => {
@@ -570,7 +759,7 @@ export const fetchReportDetails = async (reportId) => {
 
 export const modifyReportStatus = async (reportId, status) => {
   // Add validation to ensure status is one of the allowed enum values
-  if (!["PENDING", "RESOLVED", "ACTION_TAKEN"].includes(status)) {
+  if (!["PENDING", "RESOLVED", "IN_PROGRESS", "DISMISSED"].includes(status)) {
     throw new AppError("Invalid status provided.", 400);
   }
 

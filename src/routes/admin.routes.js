@@ -9,7 +9,6 @@ import {
   getAllCategories,
   getReferralReward,
   setReferralReward,
-  getReports,
   getReportDetails,
   updateReportStatus,
   getDashboardStats,
@@ -36,6 +35,11 @@ import {
   getWalletStatsController,
   getAllTransactionsController,
   creditWalletController,
+  getReportStatsController,
+  getAllReportsController,
+  getReportBreakdownController,
+  getResolutionStatsController,
+  getSuspensionHistoryController,
 } from '../controllers/admin.controller.js';
 
 const router = Router();
@@ -66,7 +70,10 @@ router.get('/settings/referral-reward', getReferralReward);
 router.put('/settings/referral-reward', setReferralReward);
 
 // --- Report Management ---
-router.get('/reports', getReports);
+router.get('/reports', getAllReportsController);
+router.get('/reports/stats', getReportStatsController);
+router.get('/reports/stats/resolution', getResolutionStatsController);
+router.get('/reports/breakdown', getReportBreakdownController);
 router.get('/reports/:id', getReportDetails);
 router.put('/reports/:id/status', updateReportStatus);
 
@@ -96,12 +103,13 @@ router.get('/users', searchUsersController); // This now handles both getting al
 router.post('/users', createUserController);
 router.get('/users/export', exportUsersController);
 router.put('/users/:userId/status', updateUserStatus);
+router.get('/suspensions/history', getSuspensionHistoryController);
 
 // --- Meetup Management ---
 router.get('/meetups', getAllMeetupsController);
 router.post('/meetups', scheduleMeetupController);
 router.put('/meetups/:id', editMeetupByAdminController);
-
+ 
 // --- Settings & Rewards ---
 router.get('/settings', getAllSettings);
 router.put('/settings', updateAllSettings); // Reused for all reward settings

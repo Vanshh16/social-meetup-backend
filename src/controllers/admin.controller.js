@@ -33,6 +33,10 @@ import {
   getCategoryDashboardStats,
   getWalletDashboardStats,
   getAllWalletTransactions,
+  getReportBreakdown,
+  getReportStats,
+  getResolutionTimeStats,
+  getSuspensionHistory,
 } from "../services/admin.service.js";
 import { updateMeetup } from '../services/meetup.service.js'; // Reusing user-facing service
 import AppError from "../utils/appError.js";
@@ -82,12 +86,22 @@ export const getUserDetailsController = async (req, res, next) => {
 export const updateUserStatus = async (req, res, next) => {
   try {
     const { userId } = req.params;
-    const updateData = req.body; // e.g., { isVerified: true, role: 'MODERATOR' }
-
-    const updatedUser = await modifyUserStatus(userId, updateData);
+    const adminId = req.user.id; // Get the admin's ID from the token
+    
+    // req.body now contains { isSuspended: true/false, reason: '...' }
+    const updatedUser = await modifyUserStatus(adminId, userId, req.body);
+    
     res.status(200).json({ success: true, data: updatedUser });
   } catch (error) {
-    // res.status(200).json({ success: false, message: error.message });
+    next(error);
+  }
+};
+
+export const getSuspensionHistoryController = async (req, res, next) => {
+  try {
+    const data = await getSuspensionHistory(req.query);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
     next(error);
   }
 };
@@ -225,12 +239,40 @@ export const getAllTransactionsController = async (req, res, next) => {
   }
 };
 
-export const getReports = async (req, res, next) => {
+// ----- Reports Controller ------ //
+
+export const getReportStatsController = async (req, res, next) => {
   try {
-    const reports = await fetchAllReports();
-    res.status(200).json({ success: true, data: reports });
+    const stats = await getReportStats();
+    res.status(200).json({ success: true, data: stats });
   } catch (error) {
-    // res.status(200).json({ success: false, message: error.message });
+    next(error);
+  }
+};
+
+export const getAllReportsController = async (req, res, next) => {
+  try {
+    const data = await fetchAllReports(req.query);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getReportBreakdownController = async (req, res, next) => {
+  try {
+    const data = await getReportBreakdown();
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getResolutionStatsController = async (req, res, next) => {
+  try {
+    const data = await getResolutionTimeStats();
+    res.status(200).json({ success: true, data });
+  } catch (error) {
     next(error);
   }
 };
