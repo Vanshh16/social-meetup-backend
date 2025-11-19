@@ -5,12 +5,24 @@ import { calculateAge } from "../utils/helper.js";
 import { createChatForMeetup } from "./chat.service.js";
 import { createNotification } from "./notification.service.js";
 
+// Helper to get price by category name
+const getCategoryPrice = async (categoryName) => {
+  if (!categoryName) return 0;
+  const category = await prisma.category.findUnique({
+    where: { name: categoryName },
+    select: { price: true }
+  });
+  return category?.price || 0;
+};
+
 export const createJoinRequest = async (meetupId, senderId) => {
   const meetup = await prisma.meetup.findUnique({
     where: { id: meetupId },
-    include: {
-      category: { select: { price: true, name: true } },
-    },
+    select: { 
+      id: true, 
+      createdBy: true, 
+      category: true
+    }
   });
   if (!meetup) throw new AppError("Meetup not found", 404);
 
@@ -25,7 +37,9 @@ export const createJoinRequest = async (meetupId, senderId) => {
     throw new AppError("Already requested to join this meetup", 400);
 
   // --- Balance Check ---
-  const joinPrice = meetup.category?.price ?? 0;
+  // const joinPrice = meetup.category?.price ?? 0;
+
+  const joinPrice = await getCategoryPrice(meetup.category);
 
   if (joinPrice > 0) {
     // 2. Fetch sender's wallet balance
@@ -119,9 +133,7 @@ export const respondToRequest = async (requestId, userId, action) => {
   const request = await prisma.joinRequest.findUnique({
     where: { id: requestId },
     include: {
-      meetup: {
-        include: { category: { select: { price: true, name: true } } },
-      },
+      meetup: true,
       sender: { select: { id: true, name: true } },
     },
   });
@@ -136,7 +148,7 @@ export const respondToRequest = async (requestId, userId, action) => {
     throw new AppError(`Request already ${request.status.toLowerCase()}`, 400);
 
   if (action === "accept") {
-    const joinPrice = request.meetup.category?.price ?? 0;
+    const joinPrice = await getCategoryPrice(request.meetup.category);
 
     return prisma.$transaction(async (tx) => {
       // 1. Debit the JOINER's wallet (This happens *now*)
