@@ -23,7 +23,7 @@ export const saveMessage = async (chatId, senderId, content, type = "TEXT") => {
         content, // This will be the text OR the image URL
         type,    // Save the type (TEXT or IMAGE)
       },
-      include: {
+      select: {
         id: true,
         content: true,
         createdAt: true,
