@@ -37,28 +37,37 @@ async function main() {
     console.log('📚 Seeding new categories and subcategories...');
     
     const categoriesData = [
+      { 
+          name: "Food & Beverage", 
+          subcategories: [
+              { name: "Coffee Meet", price: 5.0 },
+              { name: "Dinner Date", price: 20.0 },
+              { name: "Street Food", price: 2.0 }
+          ] 
+      },
+      { 
+          name: "Social Activities", 
+          subcategories: [
+              { name: "Morning Walk", price: 0.0 },
+              { name: "Movie Night", price: 15.0 }
+          ] 
+      },
+  ];
 
-        { name: "Food & Beverage Meetups", price: 5.0, subcategories: ["Tea", "Coffee", "Soft Drink", "Pizza", "Fast Food", "Lunch (Veg)", "Dinner (Non-Veg)"] },
-        { name: "Social Hangouts & Gupshup", price: 5.0, subcategories: ["Kitty Party", "Gupshup", "Chugli", "Club", "Pub", "Hangout"] },
-        { name: "Walks & Nature", price: 5.0, subcategories: ["Morning Walk", "Evening Walk", "Park", "Marine Drive"] },
-        { name: "Travel & Adventure", price: 5.0, subcategories: ["Long Drive", "Water Park", "Beach", "Vacation", "Outdoor Trip"] },
-        { name: "Entertainment", price: 5.0, subcategories: ["Movie", "Amusement Park", "Music Concert", "Carnival / Fair"] },
-        { name: "Lifestyle & Personal Interests", price: 5.0, subcategories: ["Shopping", "Gym Buddy", "Cafe Explore", "Photo Shoot"] },
-        { name: "Spiritual & Faith Meetups", price: 5.0, subcategories: ["Temple", "Church", "Gurudwara", "Masjid", "Dargah"] },
-        { name: "Spiritual Gathering", price: 5.0, subcategories: ["Bhajan Sandhya", "Satsang", "Kirtan"] },
-        { name: "Sports & Active Buddies", price: 5.0, subcategories: ["Cricket", "Hockey", "Volleyball", "Chess", "Carromboard", "Ludo"] },
-        { name: "Learning & Educational Companions", price: 5.0, subcategories: ["Group Education Discussion", "Study Together", "Politics Discussion", "Book Reading"] }
-    ];
-
-    for (const cat of categoriesData) {
-        await prisma.category.create({
-            data: {
-                name: cat.name,
-                price: cat.price,
-                subcategories: { create: cat.subcategories.map(sub => ({ name: sub })) },
-            },
-        });
-    }
+  for (const cat of categoriesData) {
+      await prisma.category.create({
+          data: {
+              name: cat.name,
+              // No price here anymore
+              subcategories: { 
+                  create: cat.subcategories.map(sub => ({ 
+                      name: sub.name,
+                      price: sub.price 
+                  })) 
+              },
+          },
+      });
+  }
 
     // 4. Seed Users
     console.log('👤 Seeding users...');

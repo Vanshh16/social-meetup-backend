@@ -89,49 +89,54 @@ export const verifyPaymentAndCreateMeetup = async (userId, meetupData, paymentDe
     // const isVerified = await verifyCashfreePayment(order_id);
     // if (!isVerified) throw new AppError("Payment verification failed.", 400);
 
-    const category = await prisma.category.findUnique({
-        where: { name: meetupData.category },
+    const subCatRecord = await prisma.subCategory.findFirst({
+        where: {
+            name: meetupData.subCategory,
+            category: { name: meetupData.category }
+        },
         select: { price: true }
     });
 
-    if (!category) {
-        throw new AppError("Selected category not found.", 404);
+    if (!subCatRecord) {
+        throw new AppError("Selected sub-category not found.", 404);
     }
-    const meetupPrice = category.price;
+    const meetupPrice = subCatRecord.price;
 
     if (!meetupData.latitude || !meetupData.longitude) {
     throw new AppError("Latitude and longitude are required to create a meetup.", 400);
   }
-    
-    return prisma.$transaction(async (tx) => {
-        // const payment = await tx.payment.update({
+
+  return prisma.$transaction(async (tx) => {
+
+    // const payment = await tx.payment.update({
         //     where: { cashfreeOrderId: order_id },
         //     data: { status: 'SUCCESS' }
         // });
 
+        // 2. Debit the creator's wallet
         if (meetupPrice > 0) {
             try {
-                await debitUserWallet(userId, meetupPrice, `Fee for creating meetup: ${meetupData.category}`, tx); // Pass 'tx'
+                await debitUserWallet(
+                    userId, 
+                    meetupPrice, 
+                    `Fee for creating meetup: ${meetupData.subCategory}`, 
+                    tx
+                );
             } catch (error) {
-                // Re-throw specific errors like insufficient funds
                 if (error.message.includes('Insufficient wallet balance')) {
-                    throw new AppError(`Insufficient wallet balance to create meetup. Required: ${meetupPrice}`, 400);
+                    throw new AppError(`Insufficient balance. Required: ${meetupPrice}`, 400);
                 }
-                throw error; // Re-throw other errors
+                throw error;
             }
         }
 
+        // 3. Create the meetup
         const meetup = await tx.meetup.create({
             data: {
                 createdBy: userId,
-                ...meetupData
+                ...meetupData 
             }
         });
-
-        // await tx.payment.update({
-        //     where: { id: payment.id },
-        //     data: { meetupId: meetup.id }
-        // });
 
         return meetup;
     });

@@ -4,15 +4,21 @@ import AppError from "../utils/appError.js";
 import { calculateAge } from "../utils/helper.js";
 import { createChatForMeetup } from "./chat.service.js";
 import { createNotification } from "./notification.service.js";
+import { debitUserWallet } from "./wallet.service.js";
 
-// Helper to get price by category name
-const getCategoryPrice = async (categoryName) => {
-  if (!categoryName) return 0;
-  const category = await prisma.category.findUnique({
-    where: { name: categoryName },
+// Helper to get price by SubCategory name + Category name
+const getSubCategoryPrice = async (categoryName, subCategoryName) => {
+  if (!categoryName || !subCategoryName) return 0;
+  
+  const subCat = await prisma.subCategory.findFirst({
+    where: {
+        name: subCategoryName,
+        category: { name: categoryName }
+    },
     select: { price: true }
   });
-  return category?.price || 0;
+  
+  return subCat?.price || 0;
 };
 
 export const createJoinRequest = async (meetupId, senderId) => {
@@ -21,7 +27,8 @@ export const createJoinRequest = async (meetupId, senderId) => {
     select: { 
       id: true, 
       createdBy: true, 
-      category: true
+      category: true,
+      subcategory: true
     }
   });
   if (!meetup) throw new AppError("Meetup not found", 404);
@@ -39,7 +46,7 @@ export const createJoinRequest = async (meetupId, senderId) => {
   // --- Balance Check ---
   // const joinPrice = meetup.category?.price ?? 0;
 
-  const joinPrice = await getCategoryPrice(meetup.category);
+  const joinPrice = await getSubCategoryPrice(meetup.category, meetup.subcategory);
 
   if (joinPrice > 0) {
     // 2. Fetch sender's wallet balance
@@ -148,8 +155,8 @@ export const respondToRequest = async (requestId, userId, action) => {
     throw new AppError(`Request already ${request.status.toLowerCase()}`, 400);
 
   if (action === "accept") {
-    const joinPrice = await getCategoryPrice(request.meetup.category);
-
+    const joinPrice = await getSubCategoryPrice(request.meetup.category, request.meetup.subcategory);
+    
     return prisma.$transaction(async (tx) => {
       // 1. Debit the JOINER's wallet (This happens *now*)
       if (joinPrice > 0) {
@@ -158,7 +165,7 @@ export const respondToRequest = async (requestId, userId, action) => {
           await debitUserWallet(
             request.senderId,
             joinPrice,
-            `Fee for joining meetup: ${request.meetup.category.name}`,
+            `Fee for joining meetup: ${request.meetup.subcategory}`,
             tx
           );
         } catch (error) {

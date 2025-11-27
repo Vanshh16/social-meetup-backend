@@ -217,39 +217,29 @@ export const addNewCategory = async (name, subcategories = []) => {
  * @param {object} updateData - An object containing { name, price, subcategories }.
  */
 export const modifyCategory = async (categoryId, updateData) => {
-  const { name, price, subcategories } = updateData;
-
-  console.log(updateData);
-  
-  // 1. Prepare the simple update data for the category
-  const categoryUpdateData = {};
-  if (name) {
-    categoryUpdateData.name = name;
-  }
-  if (price !== undefined) {
-    categoryUpdateData.price = parseFloat(price);
-  }
+  const { name, subcategories } = updateData;
 
   // 2. Use a transaction to update relations safely
   return prisma.$transaction(async (tx) => {
     // Step A: Update the main category's name and/or price
     const updatedCategory = await tx.category.update({
       where: { id: categoryId },
-      data: categoryUpdateData,
+      data: name ? { name } : undefined
     });
 
     // Step B: If a new list of subcategories was provided, replace the old ones
     if (subcategories && Array.isArray(subcategories)) {
-      // B.1: Delete all old subcategories associated with this category
+      // A. Delete old ones
       await tx.subCategory.deleteMany({
         where: { categoryId: categoryId },
       });
 
-      // B.2: Create all the new subcategories
+      // B. Create new ones with prices
       if (subcategories.length > 0) {
         await tx.subCategory.createMany({
-          data: subcategories.map(subName => ({
-            name: subName,
+          data: subcategories.map(sub => ({
+            name: sub.name,
+            price: parseFloat(sub.price || 0), // Ensure price is handled
             categoryId: categoryId,
           })),
         });

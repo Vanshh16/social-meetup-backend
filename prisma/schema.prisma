@@ -109,7 +109,7 @@ enum RelationshipStatus {
 model Meetup {
   id               String   @id @default(uuid())
   category         String
-  subcategory      String?
+  subcategory      String
   locationName     String?   // A descriptive name for the location (e.g., "Cafe Coffee Day")
   latitude         Float     // The latitude coordinate
   longitude        Float
@@ -230,13 +230,14 @@ model Category {
   id          String       @id @default(uuid())
   name        String       @unique
   subcategories SubCategory[]
-  price         Float       @default(0.0)
+  // price         Float       @default(0.0)
 }
 
 model SubCategory {
   id         String   @id @default(uuid())
   name       String
   categoryId String
+  price         Float       @default(0.0)
   category   Category @relation(fields: [categoryId], references: [id])
 }
 
