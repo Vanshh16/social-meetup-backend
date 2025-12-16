@@ -40,8 +40,6 @@ import {
   getReportBreakdownController,
   getResolutionStatsController,
   getSuspensionHistoryController,
-  getResolutionStatsController,
-  getSuspensionHistoryController,
 } from '../controllers/admin.controller.js';
 import {
   createCityController,
