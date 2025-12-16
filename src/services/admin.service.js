@@ -191,7 +191,7 @@ export const fetchAllCategories = async () => {
   return prisma.category.findMany({
     include: {
       subcategories: {
-        select: { id: true, name: true },
+        select: { id: true, name: true, price: true },
       },
     },
   });
@@ -1003,6 +1003,15 @@ export const sendNotificationToAllUsers = async (title, body) => {
  * @param {object} query - The search query (e.g., { search: 'Rahul', status: 'ACTIVE' }).
  */
 export const searchUsers = async (query) => {
+
+  const { 
+    page = 1, 
+    limit = 10, 
+  } = query;
+
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+  const take = parseInt(limit);
+  
   const whereClause = {};
 
   if (query.search) {
@@ -1013,24 +1022,51 @@ export const searchUsers = async (query) => {
     ];
   }
 
+  // --- City Filter ---
+  if (query.city) {
+    // Uses 'contains' so "Delhi" matches "New Delhi"
+    whereClause.city = { contains: query.city, mode: 'insensitive' };
+  }
+
+  // --- Gender Filter ---
+  if (query.gender) {
+    // Assumes exact match like 'MALE', 'FEMALE'
+    whereClause.gender = query.gender; 
+  }
+
   if (query.status) {
     if (query.status === "ACTIVE") whereClause.isSuspended = false;
     if (query.status === "SUSPENDED") whereClause.isSuspended = true;
     // Add more status filters as needed (e.g., PENDING for !isVerified)
   }
 
-  return prisma.user.findMany({
-    where: whereClause,
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      mobileNumber: true,
-      isVerified: true,
-      isSuspended: true, // Assuming you add this to your schema
-      createdAt: true,
-    },
-  });
+  const [users, total] = await prisma.$transaction([
+    prisma.user.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        mobileNumber: true,
+        isVerified: true,
+        role: true,
+        profilePhoto: true,
+        createdAt: true,
+        city: true, 
+        gender: true 
+      },
+      skip,
+      take,
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.user.count({ where: whereClause }),
+  ]);
+
+  return {
+    users,
+    totalPages: Math.ceil(total / take),
+    totalUsers: total,
+  };
 };
 
 /**
@@ -1069,21 +1105,18 @@ export const exportUsersToCsv = async () => {
 };
 
 /**
- * Fetches all meetups with optional filtering for the admin panel.
- * @param {object} query - The filter query (e.g., { status: 'PENDING' }).
+ * Fetches all meetups with advanced filtering and full participant details for Admin / Support.
+ * @param {object} query - The filter query.
  */
 export const fetchAllMeetups = async (query) => {
   const {
     page = 1,
     limit = 10,
-    status,
-    type,
-    category,
-    subcategory,
-    city,
-    dateFrom,
-    dateTo,
-    search,
+    status,        // Can be 'UPCOMING', 'PAST', or specific DB status
+    category,      // Search term for Category OR Subcategory
+    location,      // Search term for LocationName OR Place
+    date,          // Specific date
+    search,        // General search term
   } = query;
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -1092,87 +1125,133 @@ export const fetchAllMeetups = async (query) => {
   // --- Dynamic WHERE conditions ---
   const whereClause = {};
 
-  // ✅ Filter by status (active, cancelled, etc.)
-  if (status && status !== "ALL") {
-    whereClause.status = status.toUpperCase();
-  }
-
-  // ✅ Filter by type (instant, planned)
-  if (type && type !== "ALL") {
-    whereClause.type = type.toLowerCase();
-  }
-
-  // ✅ Filter by category / subcategory
+  // 1. Filter by Category or Subcategory (Partial Match)
   if (category && category !== "ALL") {
-    whereClause.category = category;
-  }
-
-  if (subcategory && subcategory !== "ALL") {
-    whereClause.subcategory = subcategory;
-  }
-
-  // ✅ Filter by city / locationName (case-insensitive)
-  if (city) {
-    whereClause.locationName = {
-      contains: city,
-      mode: "insensitive",
-    };
-  }
-
-  // ✅ Safe date parsing
-  const parsedFrom = dateFrom && !isNaN(Date.parse(dateFrom)) ? new Date(dateFrom) : null;
-  const parsedTo = dateTo && !isNaN(Date.parse(dateTo)) ? new Date(dateTo) : null;
-
-  if (parsedFrom || parsedTo) {
-    whereClause.date = {};
-    if (parsedFrom) whereClause.date.gte = parsedFrom;
-    if (parsedTo) whereClause.date.lte = parsedTo;
-  }
-
-
-  // ✅ Search by category, subcategory, or locationName
-  if (search) {
     whereClause.OR = [
-      { category: { contains: search, mode: "insensitive" } },
-      { subcategory: { contains: search, mode: "insensitive" } },
-      { locationName: { contains: search, mode: "insensitive" } },
+      { category: { contains: category, mode: 'insensitive' } },
+      { subCategory: { contains: category, mode: 'insensitive' } }
     ];
   }
 
-  // --- Fetch data + total count atomically ---
+  // 2. Filter by Location (City/Area/Place)
+  if (location) {
+    whereClause.OR = [
+      { locationName: { contains: location, mode: 'insensitive' } },
+      { place: { contains: location, mode: 'insensitive' } }
+    ];
+  }
+
+  // 3. Filter by Status (Time-based or Explicit)
+  if (status) {
+    if (status === 'UPCOMING') {
+      whereClause.date = { gte: new Date() };
+    } else if (status === 'PAST') {
+      whereClause.date = { lt: new Date() };
+    } else if (status !== "ALL") {
+      // If you have a specific 'status' column in DB (e.g. CANCELLED)
+      whereClause.status = status; 
+    }
+  }
+
+  // 4. Filter by Specific Date
+  if (date) {
+    const searchDate = new Date(date);
+    const nextDay = new Date(date);
+    nextDay.setDate(searchDate.getDate() + 1);
+    
+    // Combine with existing date logic if 'status' was also used
+    whereClause.date = {
+      ...whereClause.date, // Keep existing gte/lt if any
+      gte: searchDate,
+      lt: nextDay
+    };
+  }
+
+  // 5. General Search (Fallback if specific filters aren't used)
+  if (search) {
+    const searchCondition = { contains: search, mode: "insensitive" };
+    whereClause.OR = [
+      { category: searchCondition },
+      { subCategory: searchCondition },
+      { locationName: searchCondition },
+      { place: searchCondition }
+    ];
+  }
+
+  // --- Fetch Data with Relations ---
   const [meetups, total] = await prisma.$transaction([
     prisma.meetup.findMany({
       where: whereClause,
       include: {
-        user: { select: { id: true, name: true } },
-        JoinRequest: {
-          where: { status: "ACCEPTED" },
-          select: { id: true },
+        // A. Host Details (Creator) - Vital for Support
+        user: { 
+            select: { id: true, name: true, mobileNumber: true, email: true, profilePhoto: true } 
         },
+        // B. Guest Details (Accepted Participants) - Vital for Support
+        JoinRequest: {
+            where: { status: 'ACCEPTED' },
+            include: {
+                sender: { 
+                    select: { id: true, name: true, mobileNumber: true, email: true, profilePhoto: true } 
+                }
+            }
+        }
       },
-      orderBy: { createdAt: "desc" },
       skip,
       take,
+      orderBy: { date: 'desc' }, // Latest/Upcoming first
     }),
-
     prisma.meetup.count({ where: whereClause }),
   ]);
 
-  // --- Map participant count ---
-  const meetupsWithCount = meetups.map((meetup) => ({
-    ...meetup,
-    participantCount: meetup.JoinRequest.length,
-  }));
+  // --- Format Data for Admin View ---
+  const formattedMeetups = meetups.map((m) => {
+    const isPast = new Date(m.date) < new Date();
+    
+    return {
+      id: m.id,
+      meetupId: m.id, // Explicit alias for Admin ID column
+      category: m.category,
+      subCategory: m.subCategory,
+      title: `${m.category} (${m.subCategory})`, // Helper title
+      
+      location: m.locationName,
+      place: m.place || 'Not specified',
+      date: m.date,
+      time: m.time,
+      isPast,
+      
+      // Host Info (Flattened for easy table display)
+      host: {
+        id: m.user.id,
+        name: m.user.name,
+        mobile: m.user.mobileNumber,
+        email: m.user.email,
+        photo: m.user.profilePhoto
+      },
+
+      // Guests List (Who is meeting)
+      guests: m.JoinRequest.map(req => ({
+        id: req.sender.id,
+        name: req.sender.name,
+        mobile: req.sender.mobileNumber,
+        email: req.sender.email,
+        photo: req.sender.profilePhoto
+      })),
+
+      participantCount: m.JoinRequest.length
+    };
+  });
 
   return {
-      meetups: meetupsWithCount,
-      pagination: {
-        currentPage: parseInt(page),
-        totalPages: Math.ceil(total / take),
-        totalItems: total,
-        limit: take,
-      },
-    };
+    meetups: formattedMeetups,
+    pagination: {
+      currentPage: parseInt(page),
+      totalPages: Math.ceil(total / take),
+      totalItems: total,
+      limit: take,
+    },
+  };
 };
 
 /**

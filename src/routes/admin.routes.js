@@ -40,7 +40,15 @@ import {
   getReportBreakdownController,
   getResolutionStatsController,
   getSuspensionHistoryController,
+  getResolutionStatsController,
+  getSuspensionHistoryController,
 } from '../controllers/admin.controller.js';
+import {
+  createCityController,
+  updateCityStatusController,
+  getLocationsController,
+} from '../controllers/location.controller.js';
+
 
 const router = Router();
 
@@ -109,6 +117,11 @@ router.get('/suspensions/history', getSuspensionHistoryController);
 router.get('/meetups', getAllMeetupsController);
 router.post('/meetups', scheduleMeetupController);
 router.put('/meetups/:id', editMeetupByAdminController);
+ 
+// --- Location Management ---
+router.get('/locations', getLocationsController);
+router.post('/locations/city', createCityController);
+router.put('/locations/city/:id/status', updateCityStatusController);
  
 // --- Settings & Rewards ---
 router.get('/settings', getAllSettings);

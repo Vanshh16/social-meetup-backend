@@ -23,6 +23,7 @@ import uploadRoutes from './routes/upload.routes.js';
 import bannerRoutes from './routes/banner.routes.js';
 import chatRoutes from './routes/chat.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
+import locationRoutes from './routes/location.routes.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 
 
@@ -48,6 +49,7 @@ app.use('/api/v1/uploads', uploadRoutes);
 app.use('/api/v1/banners', bannerRoutes);
 app.use('/api/v1/chats', chatRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/locations', locationRoutes);
 
 app.use(errorHandler);
 

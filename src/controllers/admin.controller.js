@@ -373,8 +373,8 @@ export const sendGlobalNotificationController = async (req, res, next) => {
 
 export const searchUsersController = async (req, res, next) => {
     try {
-        const users = await searchUsers(req.query);
-        res.status(200).json({ success: true, data: users });
+        const result = await searchUsers(req.query);
+        res.status(200).json({ success: true, data: result });
     } catch (error) {
         next(error);
     }

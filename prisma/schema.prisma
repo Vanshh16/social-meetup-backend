@@ -385,3 +385,40 @@ model Notification {
 
   @@index([userId, isRead]) // Index for fast fetching of user's unread notifications
 }
+
+// 1. Define the Tiers
+enum CityTier {
+  TIER_1
+  TIER_2
+  TIER_3
+  RURAL
+}
+
+// 2. State Model
+model State {
+  id        String   @id @default(uuid())
+  name      String   @unique // e.g., "Maharashtra", "Karnataka"
+  cities    City[]
+}
+
+// 3. City Model (The Control Center)
+model City {
+  id        String   @id @default(uuid())
+  name      String   // e.g., "Mumbai", "Pune"
+  
+  tier      CityTier @default(TIER_3)
+  
+  // THE MASTER SWITCH
+  // If false = Service is "Coming Soon" (Restricted)
+  // If true = Service is "Live"
+  isActive  Boolean  @default(false) 
+
+  stateId   String
+  state     State    @relation(fields: [stateId], references: [id])
+
+  // You can link users to this city for analytics
+  // users User[] 
+
+  @@unique([name, stateId]) // Prevent duplicate cities in the same state
+  @@index([isActive])       // Fast lookup for "Live" cities
+}
