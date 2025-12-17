@@ -156,7 +156,8 @@ export const getBlockedUsers = async (blockerId) => {
 };
 
 /**
- * Updates user's GPS location and links them to a City if it exists in our DB.
+ * Updates user's GPS location and links them to a City.
+ * If the City is new, it creates it automatically.
  * @param {string} userId - The user ID
  * @param {number} lat - Latitude
  * @param {number} lng - Longitude
@@ -164,37 +165,48 @@ export const getBlockedUsers = async (blockerId) => {
  */
 export const updateUserLocation = async (userId, lat, lng, cityName) => {
   
-  // 1. Try to find the city in our database (Location Module)
-  // We use 'insensitive' mode so "mumbai" matches "Mumbai"
   let cityRelation = undefined;
 
   if (cityName) {
-    const supportedCity = await prisma.city.findFirst({
-      where: { 
-        name: { equals: cityName, mode: 'insensitive' } 
-      }
+    // 1. Try to find the city (Case Insensitive)
+    let cityRecord = await prisma.city.findFirst({
+      where: { name: { equals: cityName, mode: 'insensitive' } }
     });
 
-    if (supportedCity) {
-      // If we support this city, link the user to it!
-      cityRelation = { connect: { id: supportedCity.id } };
-    } else {
-      // If we don't support this city yet, we can disconnect the relation
-      // or leave it as is. For now, let's disconnect to keep data clean.
-      cityRelation = { disconnect: true };
+    // 2. If City does NOT exist, Create it
+    if (!cityRecord) {
+      // A. Find or Create a fallback "Others" state
+      let otherState = await prisma.state.findUnique({ where: { name: 'Others' } });
+      
+      if (!otherState) {
+        otherState = await prisma.state.create({ data: { name: 'Others' } });
+      }
+
+      // B. Create the new City (Defaulting to Inactive/Tier-3)
+      cityRecord = await prisma.city.create({
+        data: {
+          name: cityName,
+          stateId: otherState.id,
+          tier: 'TIER_3',   // Default tier
+          isActive: false   // Default to NOT LIVE
+        }
+      });
     }
+
+    // 3. Prepare the connection object
+    cityRelation = { connect: { id: cityRecord.id } };
   }
 
-  // 2. Update the User
+  // 4. Update the User with coords + city link
   return prisma.user.update({
     where: { id: userId },
     data: {
       latitude: parseFloat(lat),
       longitude: parseFloat(lng),
-      city: cityRelation // This links/unlinks the relation
+      city: cityRelation 
     },
     include: {
-      city: true // Return the linked city data so frontend knows the Tier/Status
+      city: true // Return the linked city data
     }
   });
 };

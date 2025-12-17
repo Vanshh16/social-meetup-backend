@@ -111,18 +111,31 @@ export const getAllCategories = async (req, res, next) => {
     const categories = await fetchAllCategories();
     res.status(200).json({ success: true, data: categories });
   } catch (error) {
-    // res.status(200).json({ success: false, message: error.message });
     next(error);
   }
 };
 
 export const createCategory = async (req, res, next) => {
   try {
-    const { name, subcategories } = req.body; // subcategories is an array of strings
-    const newCategory = await addNewCategory(name, subcategories);
+    // 1. Get the Image URL from Cloudinary (if uploaded)
+    const image = req.file ? req.file.path : null;
+
+    // 2. Extract body data
+    let { name, subcategories } = req.body;
+
+    // 3. PARSE SUBCATEGORIES
+    // Since this comes as 'multipart/form-data', array/objects are strings.
+    if (subcategories && typeof subcategories === 'string') {
+        try {
+            subcategories = JSON.parse(subcategories);
+        } catch (e) {
+            return res.status(400).json({ success: false, message: "Invalid subcategories format" });
+        }
+    }
+
+    const newCategory = await addNewCategory(name, image, subcategories);
     res.status(201).json({ success: true, data: newCategory });
   } catch (error) {
-    // res.status(200).json({ success: false, message: error.message });
     next(error);
   }
 };
@@ -130,7 +143,29 @@ export const createCategory = async (req, res, next) => {
 export const updateCategory = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const updateData = req.body; // updateData will be { name, price, subcategories }
+    let { name, subcategories } = req.body;
+
+    // 1. Prepare Update Object
+    const updateData = {};
+    if (name) updateData.name = name;
+
+    // 2. Handle Image: Only update if a NEW file is provided
+    if (req.file) {
+      updateData.image = req.file.path;
+    }
+
+    // 3. Handle Subcategories: Parse if string
+    if (subcategories) {
+        if (typeof subcategories === 'string') {
+            try {
+                updateData.subcategories = JSON.parse(subcategories);
+            } catch (e) {
+                 return res.status(400).json({ success: false, message: "Invalid subcategories format" });
+            }
+        } else {
+             updateData.subcategories = subcategories;
+        }
+    }
 
     const updatedCategory = await modifyCategory(id, updateData);
     res.status(200).json({ success: true, data: updatedCategory });

@@ -187,75 +187,116 @@ export const getSuspensionHistory = async (query) => {
 
 // --- Category Service Functions ---
 
+/**
+ * Fetches all categories with their image and subcategories (including price and locations).
+ */
 export const fetchAllCategories = async () => {
   return prisma.category.findMany({
     include: {
       subcategories: {
-        select: { id: true, name: true, price: true },
+        // Select the new fields: locations and price
+        select: { 
+          id: true, 
+          name: true, 
+          price: true, 
+          locations: true 
+        },
       },
     },
-  });
-};
-
-export const addNewCategory = async (name, subcategories = []) => {
-  console.log(name, subcategories);
-  
-  return prisma.category.create({
-    data: {
-      name,
-      subcategories: {
-        create: subcategories.map((subName) => ({ name: subName })),
-      },
-    },
+    orderBy: { name: 'asc' }
   });
 };
 
 /**
- * Modifies a category's name, price, and subcategories.
- * This is an atomic operation: it all succeeds or all fails.
- * @param {string} categoryId - The ID of the category to update.
- * @param {object} updateData - An object containing { name, price, subcategories }.
+ * Adds a new category with an image and subcategories.
+ * @param {string} name - Category name
+ * @param {string} image - Category image URL
+ * @param {Array} subcategories - Array of objects { name, price, locations[] }
+ */
+export const addNewCategory = async (name, image, subcategories = []) => {
+  // console.log(name, image, subcategories);
+  
+  return prisma.category.create({
+    data: {
+      name,
+      image,
+      subcategories: {
+        create: subcategories.map((sub) => ({
+          name: sub.name,
+          price: parseFloat(sub.price || 0),
+          locations: sub.locations || [] // Ensure locations array is passed
+        }))
+    },
+  }
+  });
+};
+
+/**
+ * Modifies a category's name, image, and subcategories.
+ * @param {string} categoryId
+ * @param {object} updateData - { name, image, subcategories }
  */
 export const modifyCategory = async (categoryId, updateData) => {
-  const { name, subcategories } = updateData;
+  const { name, image, subcategories } = updateData;
 
-  // 2. Use a transaction to update relations safely
   return prisma.$transaction(async (tx) => {
-    // Step A: Update the main category's name and/or price
-    const updatedCategory = await tx.category.update({
-      where: { id: categoryId },
-      data: name ? { name } : undefined
-    });
+    // Step A: Update the main category's name and/or image
+    const dataToUpdate = {};
+    if (name) dataToUpdate.name = name;
+    if (image) dataToUpdate.image = image;
 
-    // Step B: If a new list of subcategories was provided, replace the old ones
+    let updatedCategory;
+    if (Object.keys(dataToUpdate).length > 0) {
+        updatedCategory = await tx.category.update({
+            where: { id: categoryId },
+            data: dataToUpdate,
+        });
+    } else {
+        // Fetch it if we aren't updating it, so we can return it at the end
+        updatedCategory = await tx.category.findUnique({ where: { id: categoryId } });
+    }
+
+    // Step B: Replace subcategories if provided
     if (subcategories && Array.isArray(subcategories)) {
-      // A. Delete old ones
+      // 1. Delete old subcategories
       await tx.subCategory.deleteMany({
         where: { categoryId: categoryId },
       });
 
-      // B. Create new ones with prices
+      // 2. Create new ones with proper fields
       if (subcategories.length > 0) {
         await tx.subCategory.createMany({
           data: subcategories.map(sub => ({
-            name: sub.name,
-            price: parseFloat(sub.price || 0), // Ensure price is handled
             categoryId: categoryId,
+            name: sub.name,
+            price: parseFloat(sub.price || 0),
+            locations: sub.locations || [], // Update locations
           })),
         });
       }
     }
 
     return updatedCategory;
+  },
+{
+    maxWait: 5000, // Wait up to 5s for a DB connection (default is 2s)
+    timeout: 10000 // Allow the transaction 10s to finish (default is 5s)
   });
 };
 
+
+/**
+ * Deletes a category. 
+ * Note: Since you added `onDelete: Cascade` in schema, 
+ * you technically only need to delete the category, but explicit deletion is safer.
+ */
 export const removeCategory = async (categoryId) => {
-  // Prisma requires deleting related subcategories first
   return prisma.$transaction(async (tx) => {
+    // Delete subcategories first (explicit safety)
     await tx.subCategory.deleteMany({
       where: { categoryId: categoryId },
     });
+    // Delete the category
     await tx.category.delete({
       where: { id: categoryId },
     });
@@ -264,37 +305,33 @@ export const removeCategory = async (categoryId) => {
 
 /**
  * Fetches statistics for the category management dashboard.
+ * (No changes needed here as Meetup model still uses 'category' string)
  */
 export const getCategoryDashboardStats = async () => {
   // 1. Get total categories
   const categoriesTotal = prisma.category.count();
 
-  // 2. Get active meetups (defined as meetups happening today or in the future)
+  // 2. Get active meetups (today or future)
   const activeMeetups = prisma.meetup.count({
     where: { date: { gte: new Date() } },
   });
 
-  // 3. Get the top category
+  // 3. Get the top category by usage in Meetups
   const topCategoryQuery = prisma.meetup.groupBy({
     by: ['category'],
-    _count: {
-      category: true,
-    },
+    _count: { category: true },
     orderBy: {
-      _count: {
-        category: 'desc',
-      },
+      _count: { category: 'desc' },
     },
     take: 1,
   });
 
-  // 4. Get total unique locations (based on locationName)
+  // 4. Get total unique locations used in meetups
   const locationsTotalQuery = prisma.meetup.findMany({
     select: { locationName: true },
     distinct: ['locationName'],
   });
 
-  // Run all queries at the same time
   const [
     totalCategories,
     totalActiveMeetups,
@@ -307,7 +344,6 @@ export const getCategoryDashboardStats = async () => {
     locationsTotalQuery
   ]);
 
-  // Format the results
   const topCategory = topCategoryResult.length > 0 ? topCategoryResult[0].category : 'N/A';
   const totalLocations = locationsResult.length;
 

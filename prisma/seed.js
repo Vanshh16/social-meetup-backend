@@ -6,6 +6,130 @@ const random = (arr) => arr[Math.floor(Math.random() * arr.length)];
 // Helper for random int
 const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
+const categoriesData = [
+  {
+    id: 1,
+    name: "Food & Beverage Meetups",
+    image: "https://placehold.co/600x400/orange/white?text=Food",
+    subCategories: [
+      { name: "Tea", locations: ["Home", "Café", "Street", "Restaurant"], price: 20 },
+      { name: "Coffee", locations: ["Home", "Street", "Café"], price: 50 },
+      { name: "Soft Drink", locations: ["Anywhere"], price: 20 },
+      { name: "Pizza", locations: ["Restaurant", "Street", "Home"], price: 200 },
+      { name: "Fast Food", locations: ["Street", "Food Court", "Home"], price: 100 }
+    ]
+  },
+  {
+    id: 2,
+    name: "Social Hangouts & Gupshup",
+    image: "https://placehold.co/600x400/blue/white?text=Social",
+    subCategories: [
+      { name: "Kitty Party", locations: ["Home", "Restaurant", "Park", "Community Hall"], price: 0 },
+      { name: "Indoor Party", locations: ["Home", "Clubhouse"], price: 0 },
+      { name: "Outdoor Party", locations: ["Garden", "Farmhouse", "Terrace"], price: 0 },
+      { name: "Casual Gupshup", locations: ["Home", "Café", "Park", "Garden"], price: 0 },
+      { name: "Club", locations: ["Club", "Pub"], price: 500 },
+      { name: "Pub", locations: ["Pub", "Lounge"], price: 500 }
+    ]
+  },
+  {
+    id: 3,
+    name: "Walks & Nature",
+    image: "https://placehold.co/600x400/green/white?text=Nature",
+    subCategories: [
+      { name: "Morning Walk", locations: ["Park", "Colony", "Track"], price: 0 },
+      { name: "Evening Walk", locations: ["Park", "Marine Drive", "Garden"], price: 0 },
+      { name: "Park", locations: ["Public Park", "City Garden"], price: 0 },
+      { name: "Marine Drive", locations: ["Seaside", "Walk Track"], price: 0 }
+    ]
+  },
+  {
+    id: 4,
+    name: "Travel & Adventure",
+    image: "https://placehold.co/600x400/teal/white?text=Travel",
+    subCategories: [
+      { name: "Long Drive", locations: ["Highway", "Outskirts", "Natural Site"], price: 200 },
+      { name: "Water Park", locations: ["Outskirts of the City"], price: 500 },
+      { name: "Beach", locations: ["Outside City", "Coastal Area"], price: 0 },
+      { name: "Vacation", locations: ["Within State", "Outside State", "Tourist Places"], price: 1000 },
+      { name: "Outdoor Trip", locations: ["Forest", "Campsite", "Day Trip"], price: 300 }
+    ]
+  },
+  {
+    id: 5,
+    name: "Outdoor Entertainment",
+    image: "https://placehold.co/600x400/purple/white?text=Entertainment",
+    subCategories: [
+      { name: "Movie", locations: ["Theatre", "Open Theatre", "Home Theatre", "Mall"], price: 200 },
+      { name: "Amusement Park", locations: ["Outskirts of the City"], price: 500 },
+      { name: "Music Concert", locations: ["Stadium", "Arena", "Lounge"], price: 1000 }
+    ]
+  },
+  {
+    id: 6,
+    name: "Lifestyle & Personal Interests",
+    image: "https://placehold.co/600x400/pink/white?text=Lifestyle",
+    subCategories: [
+      { name: "Shopping", locations: ["Mall", "Local Market", "Online Together"], price: 0 },
+      { name: "Gym Buddy", locations: ["Gym", "Fitness Park", "Home Setup"], price: 0 },
+      { name: "Café Exploring", locations: ["Café", "Street Corner", "Coffee Chains"], price: 100 },
+      { name: "Selfie Walk", locations: ["Park", "Street Art", "Mall", "Monuments", "Marine Drive", "Seaside"], price: 0 }
+    ]
+  },
+  {
+    id: 7,
+    name: "Spiritual & Faith Meetups",
+    image: "https://placehold.co/600x400/yellow/black?text=Spiritual",
+    subCategories: [
+      { name: "Temple", locations: ["Home", "Local", "Pilgrimage Site"], price: 0 },
+      { name: "Church", locations: ["City Church", "Historic", "Outside City"], price: 0 },
+      { name: "Gurudwara", locations: ["Nearby", "Historic", "Outstation"], price: 0 },
+      { name: "Mosque", locations: ["Local", "Friday Prayer", "Dargah"], price: 0 },
+      { name: "Dargah", locations: ["Local", "Ajmer", "Famous Sites"], price: 0 },
+      { name: "Pooja / Bhajan", locations: ["Home", "Group Bhajan", "Local Temple"], price: 0 }
+    ]
+  },
+  {
+    id: 8,
+    name: "Sports & Active Buddies",
+    image: "https://placehold.co/600x400/red/white?text=Sports",
+    subCategories: [
+      { name: "Cricket", locations: ["Ground", "Local Turf", "Stadium"], price: 50 },
+      { name: "Hockey", locations: ["Turf", "School Ground", "Club"], price: 50 },
+      { name: "Volleyball", locations: ["Court", "School", "Beach"], price: 0 },
+      { name: "Chess", locations: ["Home", "Library", "Café"], price: 0 },
+      { name: "Carrom Board", locations: ["Home", "Club", "Park"], price: 0 },
+      { name: "Ludo", locations: ["Home", "Park", "Garden", "Beach"], price: 0 }
+    ]
+  },
+  {
+    id: 9,
+    name: "Learning & Education",
+    image: "https://placehold.co/600x400/indigo/white?text=Education",
+    subCategories: [
+      { name: "Study Together", locations: ["Home", "Library"], price: 0 },
+      { name: "Exam Preparation", locations: ["Coaching", "Group Call", "Home"], price: 0 },
+      { name: "Book Reading", locations: ["Book Club", "Library", "Café"], price: 0 },
+      { name: "Politics Discussion", locations: ["Home", "Park", "Tea Stall", "Café"], price: 0 },
+      { name: "GK Discussion", locations: ["Home", "Park", "Tea Stall", "Café"], price: 0 },
+      { name: "History Discussion", locations: ["Home", "Park", "Tea Stall", "Café"], price: 0 }
+    ]
+  },
+  {
+    id: 10,
+    name: "Party & Celebration",
+    image: "https://placehold.co/600x400/darkblue/white?text=Party",
+    subCategories: [
+      { name: "Bachelor Party", locations: ["Club", "Lounge", "Private Room"], price: 1000 },
+      { name: "Birthday", locations: ["Home", "Café", "Park", "Restaurant", "Pub"], price: 500 },
+      { name: "Engagement", locations: ["Hall", "Lawn", "Home"], price: 0 },
+      { name: "Success Party", locations: ["Café", "Club", "Pub"], price: 500 },
+      { name: "Breakup Party", locations: ["Pub", "Home", "Park", "Lounge"], price: 200 },
+      { name: "Joining Party", locations: ["Workplace", "Café", "Pub", "Lounge"], price: 500 }
+    ]
+  }
+];
+
 async function main() {
     console.log('🌱 Starting Seeding Process...');
 
@@ -99,50 +223,24 @@ async function main() {
     // 3. CATEGORIES & SUBCATEGORIES (With Prices)
     // --------------------------------------------------------
     console.log('🏷️ Seeding Categories...');
-
-    const categories = [
-        {
-            name: 'Food & Drinks',
-            subs: [
-                { name: 'Coffee Date', price: 50 },
-                { name: 'Fine Dining', price: 500 },
-                { name: 'Street Food', price: 10 },
-                { name: 'Drinks & Pub', price: 200 }
-            ]
-        },
-        {
-            name: 'Activities',
-            subs: [
-                { name: 'Movie Night', price: 100 },
-                { name: 'Morning Walk', price: 0 },
-                { name: 'Gym Buddy', price: 0 },
-                { name: 'Arcade Gaming', price: 150 }
-            ]
-        },
-        {
-            name: 'Travel',
-            subs: [
-                { name: 'Weekend Trip', price: 1000 },
-                { name: 'Long Drive', price: 300 },
-                { name: 'Hiking', price: 50 }
-            ]
+    for (const cat of categoriesData) {
+    await prisma.category.create({
+      data: {
+        name: cat.name,
+        image: cat.image,
+        subcategories: {
+          create: cat.subCategories.map(sub => ({
+            name: sub.name,
+            locations: sub.locations, // Stores array of strings
+            price: sub.price || 0.0   // Use default price if not specified
+          }))
         }
-    ];
+      }
+    });
+  }
 
-    const categoryMap = {}; // To quick lookup subcategories later
-
-    for (const cat of categories) {
-        const createdCat = await prisma.category.create({
-            data: {
-                name: cat.name,
-                subcategories: {
-                    create: cat.subs.map(s => ({ name: s.name, price: s.price }))
-                }
-            },
-            include: { subcategories: true }
-        });
-        categoryMap[cat.name] = createdCat;
-    }
+//   console.log('✅ Categories and SubCategories seeded successfully!');
+    
 
     // --------------------------------------------------------
     // 4. APP SETTINGS & BANNERS
@@ -170,7 +268,7 @@ async function main() {
     // --------------------------------------------------------
     console.log('👥 Seeding Users...');
 
-    const hashedPassword = await bcrypt.hash('password123', 10);
+    // const hashedPassword = await bcrypt.hash('password123', 10);
 
     // A. Admin
     const admin = await prisma.user.create({
@@ -193,7 +291,7 @@ async function main() {
             name: 'Content Mod',
             email: 'mod@meetup.com',
             mobileNumber: '8888888888',
-            password: hashedPassword,
+            password: "mod@123",
             role: 'MODERATOR',
             isVerified: true,
             authMethod: 'MOBILE_OTP',
@@ -228,7 +326,7 @@ async function main() {
                 name: u.name,
                 email: `user${index}@test.com`,
                 mobileNumber: `900000000${index}`,
-                password: hashedPassword,
+                password: "1234",
                 role: 'USER',
                 isVerified: true,
                 authMethod: 'GOOGLE',
@@ -268,15 +366,15 @@ async function main() {
     const priya = users.find(u => u.name === 'Priya Singh');
     const amit = users.find(u => u.name === 'Amit Verma');
 
-    const foodCat = categoryMap['Food & Drinks'];
-    const activityCat = categoryMap['Activities'];
+    const foodCat = categoriesData[0];
+    const activityCat = categoriesData[1];
 
     const meetupsData = [
         // 1. Instant Coffee Meet (Rahul)
         {
             createdBy: rahul.id,
             category: foodCat.name,
-            subcategory: foodCat.subcategories[0].name, // Coffee Date
+            subcategory: foodCat.subCategories[0].name, // Coffee Date
             type: 'instant',
             latitude: 19.0760,
             longitude: 72.8777,
@@ -292,7 +390,7 @@ async function main() {
         {
             createdBy: priya.id,
             category: activityCat.name,
-            subcategory: activityCat.subcategories[0].name, // Movie Night
+            subcategory: activityCat.subCategories[0].name, // Movie Night
             type: 'planned',
             latitude: 28.6139,
             longitude: 77.2090,
@@ -308,7 +406,7 @@ async function main() {
         {
             createdBy: amit.id,
             category: activityCat.name,
-            subcategory: activityCat.subcategories[2].name, // Gym Buddy
+            subcategory: activityCat.subCategories[0].name, // Gym Buddy
             type: 'planned',
             latitude: 18.5204,
             longitude: 73.8567,

@@ -46,7 +46,7 @@ import {
   updateCityStatusController,
   getLocationsController,
 } from '../controllers/location.controller.js';
-
+import { categoryUpload } from '../config/cloudinary.js'; // Import the new config
 
 const router = Router();
 
@@ -66,10 +66,20 @@ router.put('/users/:userId/status', updateUserStatus);
 
 // --- Category Management ---
 router.get('/categories', getAllCategories);
-router.post('/categories', createCategory);
-router.put('/categories/:id', updateCategory);
+// router.post('/categories', createCategory);
+// router.put('/categories/:id', updateCategory);
 router.delete('/categories/:id', deleteCategory);
 router.get('/categories/stats', getCategoryStatsController);
+router.post(
+    '/categories', 
+    categoryUpload.single('image'), // 'image' must match Frontend FormData key
+    createCategory
+);
+router.put(
+    '/categories/:id', 
+    categoryUpload.single('image'), 
+    updateCategory
+);
 
 // --- Settings & Wallet Management ---
 router.get('/settings/referral-reward', getReferralReward);

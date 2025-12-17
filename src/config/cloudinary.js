@@ -69,3 +69,14 @@ const voiceStorage = new CloudinaryStorage({
   },
 });
 export const voiceUpload = multer({ storage: voiceStorage });
+
+const categoryStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'categories', // Creates a 'categories' folder in Cloudinary
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    transformation: [{ width: 800, height: 600, crop: 'limit' }], // Optional optimization
+  },
+});
+
+export const categoryUpload = multer({ storage: categoryStorage });

@@ -233,13 +233,14 @@ model Message {
 model Category {
   id          String       @id @default(uuid())
   name        String       @unique
+  image         String?
   subcategories SubCategory[]
-  // price         Float       @default(0.0)
 }
 
 model SubCategory {
   id         String   @id @default(uuid())
   name       String
+  locations  String[]
   categoryId String
   price         Float       @default(0.0)
   category   Category @relation(fields: [categoryId], references: [id])
