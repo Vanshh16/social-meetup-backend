@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../middlewares/auth.middleware.js';
-import { blockUserController, unblockUserController, getBlockedUsersController, registerFcmTokenController, getUserProfileController, getMyProfileController, updateMyProfileController } from '../controllers/user.controller.js';
+import { blockUserController, unblockUserController, getBlockedUsersController, registerFcmTokenController, getUserProfileController, getMyProfileController, updateMyProfileController, updateLocationController } from '../controllers/user.controller.js';
 import { getAllCategories } from '../controllers/admin.controller.js';
 
 const router = Router();
@@ -16,6 +16,8 @@ router.get('/blocked', getBlockedUsersController);
 router.post('/:userId/block', blockUserController);
 router.delete('/:userId/unblock', unblockUserController);
 router.post('/register-fcm', requireAuth, registerFcmTokenController);
+router.put('/location', requireAuth, updateLocationController);
+
 router.get('/categories', getAllCategories);
 
 export default router;

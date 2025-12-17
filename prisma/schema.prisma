@@ -36,7 +36,10 @@ model User {
   whatsappNumber String?  @unique // Optional
   aadhaarNumber  String? // Masked before display (store full securely)
   religion       Religion? // Enum
-  city           String? // From GPS or manual entry
+  latitude       Float?
+  longitude      Float?
+  cityId         String?
+  city           City?     @relation(fields: [cityId], references: [id])
   referralCode     String?   @unique
   referredById     String?
   pictures       String[]
@@ -421,4 +424,5 @@ model City {
 
   @@unique([name, stateId]) // Prevent duplicate cities in the same state
   @@index([isActive])       // Fast lookup for "Live" cities
+  users User[]
 }

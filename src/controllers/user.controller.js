@@ -1,4 +1,4 @@
-import { blockUser, unblockUser, getBlockedUsers, registerFcmToken, getUserProfile, updateMyProfile, getMyProfile } from '../services/user.service.js';
+import { blockUser, unblockUser, getBlockedUsers, registerFcmToken, getUserProfile, updateMyProfile, getMyProfile, updateUserLocation } from '../services/user.service.js';
 
 export const getMyProfileController = async (req, res, next) => {
   try {
@@ -65,6 +65,40 @@ export const registerFcmTokenController = async (req, res, next) => {
     const { token } = req.body;
     await registerFcmToken(req.user.id, token);
     res.status(200).json({ success: true, message: 'FCM token registered successfully.' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateLocationController = async (req, res, next) => {
+  try {
+    const { latitude, longitude, cityName } = req.body;
+    
+    // Basic Validation
+    if (!latitude || !longitude) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Latitude and Longitude are required' 
+      });
+    }
+
+    const updatedUser = await updateUserLocation(
+      req.user.id, 
+      latitude, 
+      longitude, 
+      cityName
+    );
+
+    res.status(200).json({ 
+      success: true, 
+      message: 'Location updated successfully',
+      data: {
+        latitude: updatedUser.latitude,
+        longitude: updatedUser.longitude,
+        // If linked, this will show the city object. If not, it will be null.
+        linkedCity: updatedUser.city 
+      }
+    });
   } catch (error) {
     next(error);
   }

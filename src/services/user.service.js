@@ -154,3 +154,47 @@ export const getBlockedUsers = async (blockerId) => {
     },
   });
 };
+
+/**
+ * Updates user's GPS location and links them to a City if it exists in our DB.
+ * @param {string} userId - The user ID
+ * @param {number} lat - Latitude
+ * @param {number} lng - Longitude
+ * @param {string} cityName - The city name detected by Frontend (e.g., "Mumbai")
+ */
+export const updateUserLocation = async (userId, lat, lng, cityName) => {
+  
+  // 1. Try to find the city in our database (Location Module)
+  // We use 'insensitive' mode so "mumbai" matches "Mumbai"
+  let cityRelation = undefined;
+
+  if (cityName) {
+    const supportedCity = await prisma.city.findFirst({
+      where: { 
+        name: { equals: cityName, mode: 'insensitive' } 
+      }
+    });
+
+    if (supportedCity) {
+      // If we support this city, link the user to it!
+      cityRelation = { connect: { id: supportedCity.id } };
+    } else {
+      // If we don't support this city yet, we can disconnect the relation
+      // or leave it as is. For now, let's disconnect to keep data clean.
+      cityRelation = { disconnect: true };
+    }
+  }
+
+  // 2. Update the User
+  return prisma.user.update({
+    where: { id: userId },
+    data: {
+      latitude: parseFloat(lat),
+      longitude: parseFloat(lng),
+      city: cityRelation // This links/unlinks the relation
+    },
+    include: {
+      city: true // Return the linked city data so frontend knows the Tier/Status
+    }
+  });
+};

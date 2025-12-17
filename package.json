@@ -13,9 +13,6 @@
     "logs": "pm2 logs",
     "monit": "pm2 monit"
   },
-  "prisma": {
-    "seed": "node prisma/seed.js"
-  },
   "author": "",
   "license": "ISC",
   "dependencies": {
