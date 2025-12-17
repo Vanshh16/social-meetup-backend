@@ -40,23 +40,75 @@ export const toggleCityStatus = async (cityId, isActive) => {
  * Allows admin to see: "Show me all Inactive Tier-1 cities"
  */
 export const getLocations = async (query) => {
-  const { stateId, tier, isActive } = query;
+  const { 
+    page = 1, 
+    limit = 10, 
+    search,      // Search by City Name
+    stateId,     // Filter by State
+    tier,        // Filter by Tier (TIER_1, TIER_2...)
+    isActive     // Filter by Status (true/false)
+  } = query;
+
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+  const take = parseInt(limit);
 
   const whereClause = {};
-  if (stateId) whereClause.stateId = stateId;
-  if (tier) whereClause.tier = tier;
-  if (isActive !== undefined) whereClause.isActive = (isActive === 'true');
 
-  return prisma.city.findMany({
-    where: whereClause,
-    include: {
-      state: true
-    },
-    orderBy: [
-      { state: { name: 'asc' } },
-      { tier: 'asc' } // Show Tier 1 first
-    ]
-  });
+  if (search) {
+    whereClause.name = { contains: search, mode: 'insensitive' };
+  }
+
+  if (stateId && stateId !== 'ALL') {
+    whereClause.stateId = stateId;
+  }
+  
+  if (tier && tier !== 'ALL') {
+    whereClause.tier = tier;
+  }
+
+  if (isActive !== undefined && isActive !== 'ALL') {
+    whereClause.isActive = (isActive === 'true');
+  }
+
+  const [cities, total] = await prisma.$transaction([
+    prisma.city.findMany({
+      where: whereClause,
+      include: {
+        state: true,     // Include State details
+        _count: {
+          select: { users: true } // Optional: Show how many users are in this city
+        }
+      },
+      skip,
+      take,
+      orderBy: [
+        { isActive: 'desc' }, // Live cities first
+        { tier: 'asc' },      // Then Tier 1
+        { name: 'asc' }       // Then Alphabetical
+      ]
+    }),
+    prisma.city.count({ where: whereClause })
+  ]);
+
+  // 3. Format response
+  const formattedCities = cities.map(city => ({
+    id: city.id,
+    name: city.name,
+    state: city.state.name,
+    tier: city.tier,
+    isActive: city.isActive,
+    userCount: city._count.users // Useful metric for Admin
+  }));
+
+  return {
+    locations: formattedCities,
+    pagination: {
+      currentPage: parseInt(page),
+      totalPages: Math.ceil(total / take),
+      totalItems: total,
+      limit: take,
+    }
+  };
 };
 
 /**

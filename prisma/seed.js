@@ -178,7 +178,7 @@ async function main() {
             name: 'Super Admin',
             email: 'admin@meetup.com',
             mobileNumber: '9999999999',
-            password: hashedPassword,
+            password: "admin@123",
             role: 'ADMIN',
             isVerified: true,
             authMethod: 'MOBILE_OTP',
