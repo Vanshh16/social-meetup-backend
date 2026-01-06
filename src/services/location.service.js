@@ -13,14 +13,14 @@ export const addState = async (name) => {
  */
 export const addCity = async (data) => {
   const { name, stateId, tier, isActive } = data;
-  
+
   // Default new cities to inactive to prevent "empty room" issues
   return prisma.city.create({
     data: {
       name,
       stateId,
-      tier: tier || 'TIER_3', 
-      isActive: isActive || false 
+      tier: tier || 'TIER_3',
+      isActive: isActive || false
     }
   });
 };
@@ -40,9 +40,9 @@ export const toggleCityStatus = async (cityId, isActive) => {
  * Allows admin to see: "Show me all Inactive Tier-1 cities"
  */
 export const getLocations = async (query) => {
-  const { 
-    page = 1, 
-    limit = 10, 
+  const {
+    page = 1,
+    limit = 10,
     search,      // Search by City Name
     stateId,     // Filter by State
     tier,        // Filter by Tier (TIER_1, TIER_2...)
@@ -61,7 +61,7 @@ export const getLocations = async (query) => {
   if (stateId && stateId !== 'ALL') {
     whereClause.stateId = stateId;
   }
-  
+
   if (tier && tier !== 'ALL') {
     whereClause.tier = tier;
   }
@@ -70,25 +70,26 @@ export const getLocations = async (query) => {
     whereClause.isActive = (isActive === 'true');
   }
 
-  const [cities, total] = await prisma.$transaction([
-    prisma.city.findMany({
-      where: whereClause,
-      include: {
-        state: true,     // Include State details
-        _count: {
-          select: { users: true } // Optional: Show how many users are in this city
-        }
-      },
-      skip,
-      take,
-      orderBy: [
-        { isActive: 'desc' }, // Live cities first
-        { tier: 'asc' },      // Then Tier 1
-        { name: 'asc' }       // Then Alphabetical
-      ]
-    }),
-    prisma.city.count({ where: whereClause })
-  ]);
+  const cities = await prisma.city.findMany({
+    where: whereClause,
+    include: {
+      state: true,
+      _count: {
+        select: { users: true }
+      }
+    },
+    skip,
+    take,
+    orderBy: [
+      { isActive: 'desc' },
+      { tier: 'asc' },
+      { name: 'asc' }
+    ]
+  });
+
+  const total = await prisma.city.count({
+    where: whereClause
+  });
 
   // 3. Format response
   const formattedCities = cities.map(city => ({
@@ -116,9 +117,9 @@ export const getLocations = async (query) => {
  */
 export const checkServiceAvailability = async (cityName) => {
   const city = await prisma.city.findFirst({
-    where: { 
+    where: {
       name: { equals: cityName, mode: 'insensitive' },
-      isActive: true 
+      isActive: true
     }
   });
 

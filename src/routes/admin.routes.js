@@ -40,6 +40,8 @@ import {
   getReportBreakdownController,
   getResolutionStatsController,
   getSuspensionHistoryController,
+  createNotificationCampaign,
+  getCampaigns,
 } from '../controllers/admin.controller.js';
 import {
   createCityController,
@@ -71,14 +73,14 @@ router.get('/categories', getAllCategories);
 router.delete('/categories/:id', deleteCategory);
 router.get('/categories/stats', getCategoryStatsController);
 router.post(
-    '/categories', 
-    categoryUpload.single('image'), // 'image' must match Frontend FormData key
-    createCategory
+  '/categories',
+  categoryUpload.single('image'), // 'image' must match Frontend FormData key
+  createCategory
 );
 router.put(
-    '/categories/:id', 
-    categoryUpload.single('image'), 
-    updateCategory
+  '/categories/:id',
+  categoryUpload.single('image'),
+  updateCategory
 );
 
 // --- Settings & Wallet Management ---
@@ -104,6 +106,12 @@ router.get('/stats/dashboard', getDashboardStats);
 router.post('/users/:userId/notify', sendNotificationController);
 router.post('/users/notify/bulk', sendBulkNotificationController);
 router.post('/notify/all', sendGlobalNotificationController);
+router.post(
+  '/notifications',
+  categoryUpload.single('image'), // Expects field name 'image'
+  createNotificationCampaign
+);
+router.get('/notifications', getCampaigns);
 
 // --- Wallet Management ---
 router.post('/users/:userId/wallet/credit', creditWalletController);
@@ -125,12 +133,12 @@ router.get('/suspensions/history', getSuspensionHistoryController);
 router.get('/meetups', getAllMeetupsController);
 router.post('/meetups', scheduleMeetupController);
 router.put('/meetups/:id', editMeetupByAdminController);
- 
+
 // --- Location Management ---
 router.get('/locations', getLocationsController);
 router.post('/locations/city', createCityController);
 router.put('/locations/city/:id/status', updateCityStatusController);
- 
+
 // --- Settings & Rewards ---
 router.get('/settings', getAllSettings);
 router.put('/settings', updateAllSettings); // Reused for all reward settings

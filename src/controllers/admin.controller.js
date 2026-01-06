@@ -37,6 +37,8 @@ import {
   getReportStats,
   getResolutionTimeStats,
   getSuspensionHistory,
+  getCampaignHistory,
+  scheduleNotification,
 } from "../services/admin.service.js";
 import { updateMeetup } from '../services/meetup.service.js'; // Reusing user-facing service
 import AppError from "../utils/appError.js";
@@ -400,7 +402,55 @@ export const sendGlobalNotificationController = async (req, res, next) => {
     }
 };
 
+/**
+ * Creates a new scheduled notification campaign.
+ * Handles image upload and target parsing.
+ */
+export const createNotificationCampaign = async (req, res, next) => {
+  try {
+    // 1. Handle Image Upload (from Multer)
+    const image = req.file ? req.file.path : null;
 
+    // 2. Extract Data
+    const { title, message, targetCityId, targetGender, scheduledAt } = req.body;
+
+    // 3. Validation
+    if (!title || !message) {
+      return res.status(400).json({ success: false, message: "Title and Message are required." });
+    }
+
+    // 4. Call Service
+    const campaign = await scheduleNotification(req.user.id, {
+      title,
+      message,
+      image,
+      targetCityId, // "ALL" or UUID
+      targetGender, // "ALL", "MALE", "FEMALE"
+      scheduledAt
+    });
+
+    res.status(201).json({ 
+      success: true, 
+      message: "Notification scheduled successfully.", 
+      data: campaign 
+    });
+
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Fetches the history of all notification campaigns.
+ */
+export const getCampaigns = async (req, res, next) => {
+  try {
+    const campaigns = await getCampaignHistory();
+    res.status(200).json({ success: true, data: campaigns });
+  } catch (error) {
+    next(error);
+  }
+};
 
 
 // ------------------ LATEST -----------------------

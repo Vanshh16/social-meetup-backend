@@ -78,6 +78,7 @@ model User {
   @@index([referredById])
   Payment Payment[]
   Notification Notification[]
+  adminNotifications AdminNotification[]
 }
 
 enum AuthMethod {
@@ -426,4 +427,38 @@ model City {
   @@unique([name, stateId]) // Prevent duplicate cities in the same state
   @@index([isActive])       // Fast lookup for "Live" cities
   users User[]
+  adminNotifications AdminNotification[]
+}
+
+model AdminNotification {
+  id          String   @id @default(uuid())
+  title       String
+  message     String   @db.Text
+  image       String?
+
+  // --- TARGETING ---
+  // If null, it implies "All Cities" or "All Genders"
+  targetCityId String?
+  targetCity   City?     @relation(fields: [targetCityId], references: [id]) // Uncomment if you have a City model
+  
+  targetGender Gender? 
+
+  // --- SCHEDULING ---
+  scheduledAt DateTime 
+  status      CampaignStatus @default(PENDING)
+  
+  // Metadata
+  sentCount   Int      @default(0) 
+  adminId     String
+  admin       User     @relation(fields: [adminId], references: [id]) // Uncomment to link to Admin User
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum CampaignStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
 }

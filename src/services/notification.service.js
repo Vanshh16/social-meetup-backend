@@ -56,15 +56,16 @@ export const getNotifications = async (userId, query) => {
   if (type) whereClause.type = type;
   if (isRead) whereClause.isRead = isRead === 'true';
 
-  const [notifications, total] = await prisma.$transaction([
-    prisma.notification.findMany({
-      where: whereClause,
-      skip,
-      take,
-      orderBy: { createdAt: 'desc' },
-    }),
-    prisma.notification.count({ where: whereClause }),
-  ]);
+  const notifications = await prisma.notification.findMany({
+    where: whereClause,
+    skip,
+    take,
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const total = await prisma.notification.count({
+    where: whereClause,
+  });
 
   const unreadCount = await getUnreadCount(userId);
 
@@ -149,5 +150,116 @@ const sendPushNotification = async (userId, title, body) => {
     console.log(`Push notification sent to user ${userId}`);
   } catch (error) {
     console.error(`Failed to send push notification to user ${userId}:`, error);
+  }
+};
+
+/**
+ * WORKER: Finds due campaigns and sends them.
+ * This should be called by a Cron Job every minute.
+ */
+export const processDueNotifications = async () => {
+  const now = new Date();
+
+  // 1. Find campaigns that are PENDING and due (scheduledAt <= now)
+  const campaigns = await prisma.adminNotification.findMany({
+    where: {
+      status: 'PENDING',
+      scheduledAt: { lte: now }
+    }
+  });
+
+  for (const campaign of campaigns) {
+    console.log(`🚀 Processing Campaign: ${campaign.title}`);
+
+    // Mark as PROCESSING to prevent double-sending
+    await prisma.adminNotification.update({
+      where: { id: campaign.id },
+      data: { status: 'PROCESSING' }
+    });
+
+    try {
+      // 2. Find Target Users
+      const whereUser = {
+        isVerified: true,
+        isSuspended: false,
+        fcmTokens: { isEmpty: false } // Only get users we can actually push to
+      };
+
+      // Apply filters if they are not null (null means 'All')
+      if (campaign.targetCityId) whereUser.cityId = campaign.targetCityId; // Make sure User model has cityId relation/field
+      // OR if using string match: whereUser.city = { contains: campaign.targetCityId }
+
+      if (campaign.targetGender) whereUser.gender = campaign.targetGender;
+
+      const users = await prisma.user.findMany({
+        where: whereUser,
+        select: { id: true, fcmTokens: true }
+      });
+
+      if (users.length === 0) {
+        await prisma.adminNotification.update({
+          where: { id: campaign.id },
+          data: { status: 'COMPLETED', sentCount: 0 }
+        });
+        continue;
+      }
+
+      // 3. Create In-App Notifications (Bulk Insert)
+      // This ensures users see it in their notification history inside the app
+      const notificationsData = users.map(u => ({
+        userId: u.id,
+        type: 'admin_alert', // You might need to add this to your Type Enum or use 'other'
+        title: campaign.title,
+        subtitle: campaign.message,
+        // image: campaign.image, // Add if your Notification model supports it
+        isRead: false
+      }));
+
+      await prisma.notification.createMany({
+        data: notificationsData
+      });
+
+      // 4. Send FCM Push Notifications (Batching)
+      const allTokens = users.flatMap(u => u.fcmTokens || []);
+
+      // Firebase allows up to 500 tokens per multicast. We must batch if > 500.
+      const BATCH_SIZE = 500;
+      for (let i = 0; i < allTokens.length; i += BATCH_SIZE) {
+        const batchTokens = allTokens.slice(i, i + BATCH_SIZE);
+
+        if (batchTokens.length > 0) {
+          const message = {
+            notification: {
+              title: campaign.title,
+              body: campaign.message
+            },
+            tokens: batchTokens,
+          };
+          try {
+            await messaging.sendEachForMulticast(message);
+          } catch (err) {
+            console.error("Batch send failed", err);
+          }
+        }
+      }
+
+      // 5. Mark as COMPLETED
+      await prisma.adminNotification.update({
+        where: { id: campaign.id },
+        data: {
+          status: 'COMPLETED',
+          sentCount: users.length
+        }
+      });
+
+      console.log(`Campaign Sent to ${users.length} users.`);
+
+    } catch (error) {
+      console.error(`Campaign Failed: ${error.message}`);
+      await prisma.adminNotification.update({
+        where: { id: campaign.id },
+        data: { status: 'FAILED' }
+      });
+    }
   }
 };

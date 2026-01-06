@@ -195,11 +195,11 @@ export const fetchAllCategories = async () => {
     include: {
       subcategories: {
         // Select the new fields: locations and price
-        select: { 
-          id: true, 
-          name: true, 
-          price: true, 
-          locations: true 
+        select: {
+          id: true,
+          name: true,
+          price: true,
+          locations: true
         },
       },
     },
@@ -215,7 +215,7 @@ export const fetchAllCategories = async () => {
  */
 export const addNewCategory = async (name, image, subcategories = []) => {
   // console.log(name, image, subcategories);
-  
+
   return prisma.category.create({
     data: {
       name,
@@ -226,8 +226,8 @@ export const addNewCategory = async (name, image, subcategories = []) => {
           price: parseFloat(sub.price || 0),
           locations: sub.locations || [] // Ensure locations array is passed
         }))
-    },
-  }
+      },
+    }
   });
 };
 
@@ -247,13 +247,13 @@ export const modifyCategory = async (categoryId, updateData) => {
 
     let updatedCategory;
     if (Object.keys(dataToUpdate).length > 0) {
-        updatedCategory = await tx.category.update({
-            where: { id: categoryId },
-            data: dataToUpdate,
-        });
+      updatedCategory = await tx.category.update({
+        where: { id: categoryId },
+        data: dataToUpdate,
+      });
     } else {
-        // Fetch it if we aren't updating it, so we can return it at the end
-        updatedCategory = await tx.category.findUnique({ where: { id: categoryId } });
+      // Fetch it if we aren't updating it, so we can return it at the end
+      updatedCategory = await tx.category.findUnique({ where: { id: categoryId } });
     }
 
     // Step B: Replace subcategories if provided
@@ -278,10 +278,10 @@ export const modifyCategory = async (categoryId, updateData) => {
 
     return updatedCategory;
   },
-{
-    maxWait: 5000, // Wait up to 5s for a DB connection (default is 2s)
-    timeout: 10000 // Allow the transaction 10s to finish (default is 5s)
-  });
+    {
+      maxWait: 5000, // Wait up to 5s for a DB connection (default is 2s)
+      timeout: 10000 // Allow the transaction 10s to finish (default is 5s)
+    });
 };
 
 
@@ -404,13 +404,13 @@ export const getWalletDashboardStats = async () => {
     },
   });
 
-//   const pendingWithdrawals = prisma.walletTransaction.aggregate({
-//   where: {
-//     type: 'DEBIT',
-//     description: { contains: 'pending', mode: 'insensitive' },
-//   },
-//   _sum: { amount: true },
-// });
+  //   const pendingWithdrawals = prisma.walletTransaction.aggregate({
+  //   where: {
+  //     type: 'DEBIT',
+  //     description: { contains: 'pending', mode: 'insensitive' },
+  //   },
+  //   _sum: { amount: true },
+  // });
 
   // 4. Get pending withdrawals (assuming a 'DEBIT' with 'PENDING' status)
   // This requires a 'status' field on WalletTransaction, which you may want to add.
@@ -437,7 +437,7 @@ export const getWalletDashboardStats = async () => {
  */
 export const getAllWalletTransactions = async (query) => {
   console.log(query);
-  
+
   const { page = 1, limit = 10, searchTerm, type, userId } = query;
   const skip = (parseInt(page) - 1) * parseInt(limit);
   const take = parseInt(limit);
@@ -490,14 +490,14 @@ export const getAllWalletTransactions = async (query) => {
     reason: t.description,
     status: "COMPLETED", // Placeholder
   }));
-  
+
   // Get a list of all users who have transactions for the filter dropdown
   const usersWithTransactions = await prisma.user.findMany({
-      where: { UserWallet: { transactions: { some: {} } } },
-      select: { id: true, name: true }
+    where: { UserWallet: { transactions: { some: {} } } },
+    select: { id: true, name: true }
   });
 
-  return { 
+  return {
     transactions: formattedTransactions,
     uniqueUsers: usersWithTransactions,
     totalPages: Math.ceil(total / take),
@@ -542,7 +542,7 @@ export const manuallyCreditWallet = async ({ userId, amount, description, sendNo
     throw new AppError("Invalid credit amount.", 400);
   }
 
-  const transaction = creditUserWallet(userId, amount, description || "Manual credit by admin" )
+  const transaction = creditUserWallet(userId, amount, description || "Manual credit by admin")
   // Use a transaction to ensure both operations (update wallet, create transaction record) succeed or fail together.
   // const transaction = prisma.$transaction(async (tx) => {
   //   // 1. Find the user's wallet
@@ -639,9 +639,9 @@ export const getReportStats = async () => {
       updatedAt: { gte: today }, // Assuming 'updatedAt' is changed on status update
     },
   });
-  
+
   const falseReports = prisma.userReport.count({
-      where: { status: 'DISMISSED' }
+    where: { status: 'DISMISSED' }
   });
 
   // Run all queries at the same time
@@ -691,7 +691,7 @@ export const fetchAllReports = async (query) => {
     prisma.userReport.count({ where: whereClause }),
   ]);
 
-  return { 
+  return {
     reports,
     totalPages: Math.ceil(total / take),
     totalReports: total
@@ -743,7 +743,7 @@ export const getResolutionTimeStats = async () => {
     FROM "UserReport"
     WHERE "status" = 'RESOLVED'
   `;
-  
+
   const stats = result[0] || { avg: 0, min: 0, max: 0 };
 
   // Convert seconds (from EPOCH) to milliseconds for the helper function
@@ -1032,6 +1032,42 @@ export const sendNotificationToAllUsers = async (title, body) => {
   }
 };
 
+/**
+ * Schedules a notification campaign targeting specific users.
+ * @param {string} adminId - ID of the admin creating this.
+ * @param {object} data - { title, message, image, targetCityId, targetGender, scheduledAt }
+ */
+export const scheduleNotification = async (adminId, data) => {
+  const { title, message, image, targetCityId, targetGender, scheduledAt } = data;
+
+  // If no time provided, default to NOW
+  const sendTime = scheduledAt ? new Date(scheduledAt) : new Date();
+
+  return prisma.adminNotification.create({
+    data: {
+      title,
+      message,
+      image,
+      // If 'ALL' is passed from frontend, store as null
+      targetCityId: targetCityId === 'ALL' ? null : targetCityId,
+      targetGender: targetGender === 'ALL' ? null : targetGender,
+      scheduledAt: sendTime,
+      adminId,
+      status: 'PENDING'
+    }
+  });
+};
+
+/**
+ * Fetches notification campaign history.
+ */
+export const getCampaignHistory = async () => {
+  return prisma.adminNotification.findMany({
+    orderBy: { createdAt: 'desc' },
+    include: { targetCity: true } // Uncomment if you have City relation
+  });
+};
+
 // ----------------------------- LATEST -----------------------------
 
 /**
@@ -1040,14 +1076,14 @@ export const sendNotificationToAllUsers = async (title, body) => {
  */
 export const searchUsers = async (query) => {
 
-  const { 
-    page = 1, 
-    limit = 10, 
+  const {
+    page = 1,
+    limit = 10,
   } = query;
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
   const take = parseInt(limit);
-  
+
   const whereClause = {};
 
   if (query.search) {
@@ -1067,7 +1103,7 @@ export const searchUsers = async (query) => {
   // --- Gender Filter ---
   if (query.gender) {
     // Assumes exact match like 'MALE', 'FEMALE'
-    whereClause.gender = query.gender; 
+    whereClause.gender = query.gender;
   }
 
   if (query.status) {
@@ -1088,8 +1124,8 @@ export const searchUsers = async (query) => {
         role: true,
         profilePhoto: true,
         createdAt: true,
-        city: true, 
-        gender: true 
+        city: true,
+        gender: true
       },
       skip,
       take,
@@ -1185,7 +1221,7 @@ export const fetchAllMeetups = async (query) => {
       whereClause.date = { lt: new Date() };
     } else if (status !== "ALL") {
       // If you have a specific 'status' column in DB (e.g. CANCELLED)
-      whereClause.status = status; 
+      whereClause.status = status;
     }
   }
 
@@ -1194,7 +1230,7 @@ export const fetchAllMeetups = async (query) => {
     const searchDate = new Date(date);
     const nextDay = new Date(date);
     nextDay.setDate(searchDate.getDate() + 1);
-    
+
     // Combine with existing date logic if 'status' was also used
     whereClause.date = {
       ...whereClause.date, // Keep existing gte/lt if any
@@ -1220,17 +1256,17 @@ export const fetchAllMeetups = async (query) => {
       where: whereClause,
       include: {
         // A. Host Details (Creator) - Vital for Support
-        user: { 
-            select: { id: true, name: true, mobileNumber: true, email: true, profilePhoto: true } 
+        user: {
+          select: { id: true, name: true, mobileNumber: true, email: true, profilePhoto: true }
         },
         // B. Guest Details (Accepted Participants) - Vital for Support
         JoinRequest: {
-            where: { status: 'ACCEPTED' },
-            include: {
-                sender: { 
-                    select: { id: true, name: true, mobileNumber: true, email: true, profilePhoto: true } 
-                }
+          where: { status: 'ACCEPTED' },
+          include: {
+            sender: {
+              select: { id: true, name: true, mobileNumber: true, email: true, profilePhoto: true }
             }
+          }
         }
       },
       skip,
@@ -1243,20 +1279,20 @@ export const fetchAllMeetups = async (query) => {
   // --- Format Data for Admin View ---
   const formattedMeetups = meetups.map((m) => {
     const isPast = new Date(m.date) < new Date();
-    
+
     return {
       id: m.id,
       meetupId: m.id, // Explicit alias for Admin ID column
       category: m.category,
       subCategory: m.subCategory,
       title: `${m.category} (${m.subCategory})`, // Helper title
-      
+
       location: m.locationName,
       place: m.place || 'Not specified',
       date: m.date,
       time: m.time,
       isPast,
-      
+
       // Host Info (Flattened for easy table display)
       host: {
         id: m.user.id,
