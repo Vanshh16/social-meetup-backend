@@ -54,6 +54,16 @@ export const fetchAllUsers = async () => {
       role: true,
       isVerified: true,
       createdAt: true,
+      city: {
+        select: {
+          name: true,
+          state: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      },
     },
     orderBy: {
       createdAt: "desc",
